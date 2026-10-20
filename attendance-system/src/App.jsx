@@ -348,7 +348,7 @@ const DAY_HEADERS = [
 ];
 const YEARS_LIST = Array.from({ length: 151 }, (_, i) => 1950 + i); // 1950 to 2100 (All Available Years)
 
-// CUSTOM ELEGANT SELECT DROPDOWN COMPONENT (Replaces ugly native browser selects across all calendars)
+// CUSTOM ELEGANT SELECT DROPDOWN COMPONENT (Replaces ugly native browser selects across all panels & modals)
 const CustomSelectDropdown = ({
   value,
   onChange,
@@ -360,14 +360,22 @@ const CustomSelectDropdown = ({
   menuClassName = '',
   isMono = false,
   title = '',
+  fullWidth = false,
+  searchable = false,
+  placeholder = 'Select option',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
   const activeItemRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   // Close when clicking outside or pressing Escape
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setSearchTerm('');
+      return;
+    }
     const handleOutsideClick = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setIsOpen(false);
@@ -384,36 +392,57 @@ const CustomSelectDropdown = ({
     };
   }, [isOpen]);
 
-  // Scroll active item into view smoothly when dropdown opens
+  // Focus search input or scroll to active item
   useEffect(() => {
-    if (isOpen && activeItemRef.current) {
-      activeItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    if (isOpen) {
+      if (searchable && searchInputRef.current) {
+        searchInputRef.current.focus();
+      } else if (activeItemRef.current) {
+        activeItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, searchable]);
 
   const normalizedOptions = useMemo(() => {
     return options.map(opt => {
       if (typeof opt === 'object' && opt !== null) {
-        return { value: opt.value, label: opt.label || String(opt.value) };
+        return { 
+          value: opt.value, 
+          label: opt.label || String(opt.value),
+          sublabel: opt.sublabel || null 
+        };
       }
-      return { value: opt, label: String(opt) };
+      return { value: opt, label: String(opt), sublabel: null };
     });
   }, [options]);
 
-  const currentOpt = normalizedOptions.find(o => String(o.value) === String(value)) || normalizedOptions[0];
+  const filteredOptions = useMemo(() => {
+    if (!searchable || !searchTerm.trim()) return normalizedOptions;
+    const q = searchTerm.toLowerCase();
+    return normalizedOptions.filter(o => 
+      o.label.toLowerCase().includes(q) || 
+      (o.sublabel && o.sublabel.toLowerCase().includes(q))
+    );
+  }, [normalizedOptions, searchable, searchTerm]);
+
+  const currentOpt = normalizedOptions.find(o => String(o.value) === String(value));
 
   return (
-    <div ref={containerRef} className={`relative inline-block text-left ${className}`} title={title}>
+    <div 
+      ref={containerRef} 
+      className={`relative ${fullWidth ? 'w-full block' : 'inline-block text-left'} ${className}`} 
+      title={title}
+    >
       <button
         type="button"
         onClick={() => setIsOpen(prev => !prev)}
-        className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200/90 hover:border-orange-500 text-xs sm:text-sm font-black text-slate-800 flex items-center justify-between gap-1.5 transition-all cursor-pointer shadow-2xs group focus:outline-none focus:ring-2 focus:ring-orange-400/20 active:scale-98 ${buttonClassName}`}
+        className={`${fullWidth ? 'w-full' : ''} px-3.5 py-2.5 rounded-2xl bg-slate-50 hover:bg-white border border-slate-200 hover:border-orange-500 text-sm font-bold text-slate-800 flex items-center justify-between gap-2 transition-all cursor-pointer shadow-2xs group focus:outline-none focus:ring-2 focus:ring-orange-400/20 active:scale-[0.99] ${buttonClassName}`}
       >
-        <span className={`truncate ${isMono ? 'font-mono' : ''}`}>
-          {currentOpt ? currentOpt.label : value}
+        <span className={`truncate text-left ${isMono ? 'font-mono' : ''}`}>
+          {currentOpt ? currentOpt.label : (placeholder || value || 'Select option')}
         </span>
         <ChevronDown 
-          className={`w-3.5 h-3.5 text-slate-400 group-hover:text-orange-500 transition-transform duration-200 shrink-0 ${
+          className={`w-4 h-4 text-slate-400 group-hover:text-orange-500 transition-transform duration-200 shrink-0 ${
             isOpen ? 'rotate-180 text-orange-500' : ''
           }`} 
         />
@@ -421,36 +450,73 @@ const CustomSelectDropdown = ({
 
       {isOpen && (
         <div
-          className={`absolute top-full mt-1.5 z-[70] ${align === 'right' ? 'right-0' : 'left-0'} ${minWidth} max-h-56 overflow-y-auto overscroll-contain bg-white/98 backdrop-blur-md rounded-2xl shadow-xl border border-slate-100 p-1.5 custom-scroll animate-in fade-in zoom-in-95 duration-150 ${menuClassName}`}
+          className={`absolute top-full mt-1.5 z-[80] ${
+            fullWidth 
+              ? 'left-0 right-0 w-full' 
+              : `${align === 'right' ? 'right-0' : 'left-0'} ${minWidth}`
+          } max-h-60 overflow-y-auto overscroll-contain bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-100 p-1.5 custom-scroll animate-in fade-in zoom-in-95 duration-150 ${menuClassName}`}
         >
-          {normalizedOptions.map(opt => {
-            const isSelected = String(opt.value) === String(value);
-            return (
-              <button
-                key={opt.value}
-                ref={isSelected ? activeItemRef : null}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full px-3 py-1.5 sm:py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer text-left mb-0.5 last:mb-0 ${
-                  isSelected
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black shadow-xs'
-                    : 'text-slate-700 font-bold hover:bg-orange-50 hover:text-orange-600'
-                }`}
-              >
-                <span className={`truncate ${isMono ? 'font-mono' : ''}`}>{opt.label}</span>
-                {isSelected && <Check className="w-3.5 h-3.5 shrink-0 ml-1.5 stroke-[2.5]" />}
-              </button>
-            );
-          })}
+          {searchable && (
+            <div className="p-1.5 mb-1 border-b border-slate-100 sticky top-0 bg-white/95 backdrop-blur-xs z-10">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200">
+                <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Type to search..."
+                  className="w-full text-xs font-bold text-slate-800 bg-transparent outline-none placeholder:text-slate-400"
+                />
+                {searchTerm && (
+                  <button type="button" onClick={() => setSearchTerm('')} className="text-slate-400 hover:text-slate-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {filteredOptions.length === 0 ? (
+            <div className="py-4 text-center text-xs font-bold text-slate-400">
+              No matching options found
+            </div>
+          ) : (
+            filteredOptions.map(opt => {
+              const isSelected = String(opt.value) === String(value);
+              return (
+                <button
+                  key={opt.value}
+                  ref={isSelected ? activeItemRef : null}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer text-left mb-0.5 last:mb-0 ${
+                    isSelected
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black shadow-xs'
+                      : 'text-slate-700 font-bold hover:bg-orange-50 hover:text-orange-600'
+                  }`}
+                >
+                  <div className="truncate mr-2">
+                    <span className={`block truncate ${isMono ? 'font-mono' : ''}`}>{opt.label}</span>
+                    {opt.sublabel && (
+                      <span className={`text-[10px] block truncate font-medium ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                        {opt.sublabel}
+                      </span>
+                    )}
+                  </div>
+                  {isSelected && <Check className="w-3.5 h-3.5 shrink-0 ml-1.5 stroke-[2.5]" />}
+                </button>
+              );
+            })
+          )}
         </div>
       )}
     </div>
   );
 };
-
 
 const normalizeStudent = (s) => {
   let t = s.type;
@@ -746,7 +812,8 @@ export default function App() {
   const [formData, setFormData] = useState({
     name: '', phone: '', course: 'Light Motor Vehicle (LMV)', type: 'item_8', time: '06:00 AM', 
     totalFees: 8000, paidFees: 0, paymentAmount: '',
-    paymentMethod: 'UPI', paymentDate: getTodayKey(), paymentNote: ''
+    paymentMethod: 'UPI', paymentDate: getTodayKey(), paymentNote: '',
+    selectedStudentId: '', selectedSlot: '06:00 AM'
   });
 
   // Auto-fill Total Fees based on Class Type selection
@@ -1733,6 +1800,14 @@ export default function App() {
   const openModal = (mode, data = null) => {
     setShowModalPass(false);
     setModalConfig({ isOpen: true, mode, data });
+    if (mode === 'assign_slot') {
+      setFormData(prev => ({
+        ...prev,
+        selectedStudentId: '',
+        selectedSlot: data?.time || '06:00 AM'
+      }));
+      return;
+    }
     if (mode === 'edit' || mode === 'view' || mode === 'reschedule' || mode === 'payment' || mode === 'confirm_remove_slot') {
       const digits = String(data.enrollmentNo || data.id || '').replace(/\D/g, '');
       const currentCourse = (data.course === 'None') ? 'None' : 'Light Motor Vehicle (LMV)';
@@ -5146,49 +5221,50 @@ export default function App() {
 
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-wider">
-                      Select Registered Trainee
+                      Select Registered Trainee ({students.length} Total)
                     </label>
-                    <select
-                      id="assign_trainee_select"
-                      defaultValue=""
-                      className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 outline-none focus:border-orange-500 cursor-pointer"
-                    >
-                      <option value="" disabled>-- Select a trainee ({students.length} registered) --</option>
-                      {students.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.enrollmentNo || s.id} — {s.name} ({s.time ? `Slot: ${s.time}` : 'No Slot Assigned'})
-                        </option>
-                      ))}
-                    </select>
+                    <CustomSelectDropdown
+                      value={formData.selectedStudentId}
+                      onChange={(id) => setFormData(prev => ({ ...prev, selectedStudentId: id }))}
+                      options={students.map(s => ({
+                        value: s.id,
+                        label: `${s.enrollmentNo ? 'No. ' + s.enrollmentNo : s.id} — ${s.name}`,
+                        sublabel: s.time ? `Current Slot: ${s.time} • ${getPackageDetails(s.type)?.short || ''}` : 'No slot assigned (Available)'
+                      }))}
+                      fullWidth={true}
+                      searchable={true}
+                      placeholder={`-- Search / Select Trainee (${students.length} Registered) --`}
+                      buttonClassName="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900"
+                      title="Select Registered Trainee"
+                    />
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-wider">
                       Select Training Time Slot
                     </label>
-                    <select
-                      id="assign_slot_select"
-                      defaultValue={modalConfig.data?.time || '06:00 AM'}
-                      className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 outline-none focus:border-orange-500 cursor-pointer"
-                    >
-                      {TIME_SLOTS.map(t => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
+                    <CustomSelectDropdown
+                      value={formData.selectedSlot || modalConfig.data?.time || '06:00 AM'}
+                      onChange={(slot) => setFormData(prev => ({ ...prev, selectedSlot: slot }))}
+                      options={TIME_SLOTS.map(t => ({
+                        value: t,
+                        label: t,
+                        sublabel: '30-Minute Driving Practice Slot'
+                      }))}
+                      fullWidth={true}
+                      buttonClassName="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900"
+                      title="Select Training Time Slot"
+                    />
                   </div>
 
                   <div className="flex items-center gap-3 pt-3">
                     <button
                       type="button"
                       onClick={() => {
-                        const sel = document.getElementById('assign_trainee_select');
-                        const selSlot = document.getElementById('assign_slot_select');
-                        const sId = sel ? sel.value : null;
-                        const assignedSlot = (selSlot ? selSlot.value : null) || modalConfig.data?.time || '06:00 AM';
+                        const sId = formData.selectedStudentId;
+                        const assignedSlot = formData.selectedSlot || modalConfig.data?.time || '06:00 AM';
                         if (!sId) {
-                          showToast('Please select a trainee');
+                          showToast('Please select a trainee from the list');
                           return;
                         }
                         const targetStudent = students.find(s => s.id === sId);
@@ -5295,17 +5371,18 @@ export default function App() {
                     <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-wider">
                       Select New 30-Minute Time Slot
                     </label>
-                    <select 
-                      value={formData.time} 
-                      onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                      className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-black outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all cursor-pointer text-slate-800"
-                    >
-                      {TIME_SLOTS.map(t => (
-                        <option key={t} value={t}>
-                          {t} {t === modalConfig.data?.time ? '— (Current Slot)' : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <CustomSelectDropdown
+                      value={formData.time || modalConfig.data?.time || '06:00 AM'}
+                      onChange={(slot) => setFormData(prev => ({ ...prev, time: slot }))}
+                      options={TIME_SLOTS.map(t => ({
+                        value: t,
+                        label: t === modalConfig.data?.time ? `${t} — (Current Slot)` : t,
+                        sublabel: '30-Minute Practice Slot'
+                      }))}
+                      fullWidth={true}
+                      buttonClassName="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-black text-slate-800"
+                      title="Select New Time Slot"
+                    />
                   </div>
 
                   <div className="flex items-center gap-3 pt-2">
@@ -5584,10 +5661,9 @@ export default function App() {
 
                       <div>
                         <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">Course Package (6 Options from Catalog)</label>
-                        <select 
-                          value={formData.type} 
-                          onChange={(e) => {
-                            const newType = e.target.value;
+                        <CustomSelectDropdown
+                          value={formData.type}
+                          onChange={(newType) => {
                             const classCfg = getPackageDetails(newType);
                             setFormData(prev => ({ 
                               ...prev, 
@@ -5595,15 +5671,18 @@ export default function App() {
                               totalFees: modalConfig.mode === 'add' ? (classCfg?.defaultFee || prev.totalFees) : prev.totalFees
                             }));
                           }}
-                          className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all cursor-pointer text-slate-900"
-                        >
-                          <option value="item_8">Four Wheeler Training with 2 & 4 Wheeler Licence</option>
-                          <option value="item_12">Four Wheeler Training Only - 21 Days</option>
-                          <option value="item_13">Four Wheeler Training Only - 10 Days</option>
-                          <option value="item_3">Two Wheeler & Four Wheeler Licence Only</option>
-                          <option value="item_1">Only Two Wheeler Licence</option>
-                          <option value="item_2">Only Four Wheeler Licence</option>
-                        </select>
+                          options={[
+                            { value: 'item_8', label: 'Four Wheeler Training with 2 & 4 Wheeler Licence', sublabel: 'Fee: ₹8,000 • 2W & 4W + Training (double)' },
+                            { value: 'item_12', label: 'Four Wheeler Training Only - 21 Days', sublabel: 'Fee: ₹6,000 • 21D Training (training only)' },
+                            { value: 'item_13', label: 'Four Wheeler Training Only - 10 Days', sublabel: 'Fee: ₹4,000 • 10D Training (training only)' },
+                            { value: 'item_3', label: 'Two Wheeler & Four Wheeler Licence Only', sublabel: 'Fee: ₹4,500 • 2W & 4W Licence (double)' },
+                            { value: 'item_1', label: 'Only Two Wheeler Licence', sublabel: 'Fee: ₹2,500 • 2W Licence (single)' },
+                            { value: 'item_2', label: 'Only Four Wheeler Licence', sublabel: 'Fee: ₹3,000 • 4W Licence (single)' }
+                          ]}
+                          fullWidth={true}
+                          buttonClassName="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900"
+                          title="Select Course Package"
+                        />
                         <p className="text-[11px] font-bold text-slate-400 mt-1 pl-1">
                           Short Form on card: <span className="text-orange-600 font-extrabold">{getPackageDetails(formData.type)?.short}</span>
                         </p>
@@ -5614,24 +5693,32 @@ export default function App() {
                           <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
                             Vehicle Course
                           </label>
-                          <select 
-                            value={formData.course === 'None' ? 'None' : 'Light Motor Vehicle (LMV)'} 
-                            onChange={(e) => setFormData({ ...formData, course: e.target.value })}
-                            className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-black outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all cursor-pointer text-slate-800"
-                          >
-                            <option value="Light Motor Vehicle (LMV)">Light Motor Vehicle (LMV)</option>
-                            <option value="None">None</option>
-                          </select>
+                          <CustomSelectDropdown
+                            value={formData.course === 'None' ? 'None' : 'Light Motor Vehicle (LMV)'}
+                            onChange={(val) => setFormData(prev => ({ ...prev, course: val }))}
+                            options={[
+                              { value: 'Light Motor Vehicle (LMV)', label: 'Light Motor Vehicle (LMV)', sublabel: 'Standard 4W Driving Training' },
+                              { value: 'None', label: 'None', sublabel: 'Licence Only / Non-Driving' }
+                            ]}
+                            fullWidth={true}
+                            buttonClassName="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-black text-slate-800"
+                            title="Select Vehicle Course"
+                          />
                         </div>
                         <div>
                           <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">Time Slot</label>
-                          <select 
-                            value={formData.time} 
-                            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                            className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all cursor-pointer"
-                          >
-                            {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
+                          <CustomSelectDropdown
+                            value={formData.time || '06:00 AM'}
+                            onChange={(val) => setFormData(prev => ({ ...prev, time: val }))}
+                            options={TIME_SLOTS.map(t => ({
+                              value: t,
+                              label: t,
+                              sublabel: 'Daily 30-min slot'
+                            }))}
+                            fullWidth={true}
+                            buttonClassName="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800"
+                            title="Select Time Slot"
+                          />
                         </div>
                       </div>
 
