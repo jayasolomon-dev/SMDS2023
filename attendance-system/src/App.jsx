@@ -505,7 +505,7 @@ export default function App() {
   // LocalStorage persistence for Trainees & Attendance
   const [students, setStudents] = useState(() => {
     try {
-      const saved = localStorage.getItem('smds_trainees_data_v6');
+      const saved = localStorage.getItem('smds_trainees_data_v7');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 50) {
@@ -533,7 +533,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('smds_trainees_data_v6', JSON.stringify(students));
+      localStorage.setItem('smds_trainees_data_v7', JSON.stringify(students));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -1299,8 +1299,26 @@ export default function App() {
     const matched = students.find(s => {
       const u = (s.username || getTraineeUsername(s.enrollmentNo)).toUpperCase();
       const rawEnr = String(s.enrollmentNo || '').toUpperCase();
+      
+      // Normalized forms without leading zeros (e.g. 01/01 -> 1/1)
+      const normEnr = rawEnr.split('/').map(p => String(parseInt(p, 10) || p)).join('/');
+      const cleanWithoutSMDS = cleanUser.replace(/^SMDS/, '');
+      const normInput = cleanWithoutSMDS.split('/').map(p => String(parseInt(p, 10) || p)).join('/');
+      
       const p = s.password || getTraineePassword(s.enrollmentNo);
-      return (u === cleanUser || rawEnr === cleanUser) && p === cleanPass;
+      const isUserMatch = (
+        u === cleanUser || 
+        rawEnr === cleanUser || 
+        `SMDS${rawEnr}` === cleanUser || 
+        normEnr === normInput || 
+        `SMDS${normEnr}` === cleanUser
+      );
+      const isPassMatch = (
+        p === cleanPass || 
+        p.toLowerCase() === cleanPass.toLowerCase() || 
+        `smds@${normEnr}` === cleanPass.toLowerCase()
+      );
+      return isUserMatch && isPassMatch;
     });
 
     if (matched) {
@@ -1563,7 +1581,9 @@ export default function App() {
           }
         }
       });
-      const nextEnr = `${maxMonthSNo + 1}/${curMonthNum}`;
+      const nextSNoPadded = String(maxMonthSNo + 1).padStart(2, '0');
+      const monthPadded = String(curMonthNum).padStart(2, '0');
+      const nextEnr = `${nextSNoPadded}/${monthPadded}`;
       setFormData({ 
         enrollmentNo: nextEnr, 
         name: '', phone: '', course: 'Light Motor Vehicle (LMV)', type: 'item_8', 
@@ -1592,7 +1612,14 @@ export default function App() {
       const initials = formData.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
       const classCfg = CLASS_TYPES[formData.type] || CLASS_TYPES['21d_license'];
       const rawNum = String(formData.enrollmentNo || '').replace(/[^0-9/]/g, '').trim();
-      const finalEnr = rawNum || String(maxNum + 1);
+      let finalEnr = rawNum;
+      if (!finalEnr) {
+        const curM = String(new Date().getMonth() + 1).padStart(2, '0');
+        finalEnr = `01/${curM}`;
+      } else if (finalEnr.includes('/')) {
+        const [sNoP, mP] = finalEnr.split('/');
+        finalEnr = `${String(sNoP).padStart(2, '0')}/${String(mP).padStart(2, '0')}`;
+      }
       const genUser = getTraineeUsername(finalEnr);
       const genPass = getTraineePassword(finalEnr);
       const paidAdvance = Number(formData.paidFees) || 0;
@@ -1645,7 +1672,11 @@ export default function App() {
       const rawNum = String(formData.enrollmentNo || '').replace(/[^0-9/]/g, '').trim();
       setStudents(students.map(s => {
         if (s.id === modalConfig.data.id) {
-          const finalEnr = rawNum || s.enrollmentNo;
+          let finalEnr = rawNum || s.enrollmentNo;
+          if (finalEnr && finalEnr.includes('/')) {
+            const [sNoP, mP] = finalEnr.split('/');
+            finalEnr = `${String(sNoP).padStart(2, '0')}/${String(mP).padStart(2, '0')}`;
+          }
           const newTot = Math.max(0, Number(formData.totalFees) || 0);
           const newPaid = Math.max(0, Number(formData.paidFees) || 0);
           let currentHistory = Array.isArray(s.fees?.history) ? [...s.fees.history] : [];

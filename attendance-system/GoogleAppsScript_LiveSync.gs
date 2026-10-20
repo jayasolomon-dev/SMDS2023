@@ -149,8 +149,10 @@ function handleAddTrainee(data) {
     targetRow = lastRow + 1;
   }
 
-  // Enrollment Number format: S.NO / Current Month Numeric (eg. 1/1, 2/1, 1/10, 18/10)
-  const formattedEnrollmentNo = nextSNo + '/' + monthInfo.numeric;
+  // Enrollment Number format: Double Series 00/00 (eg. 01/01, 02/01, 01/10, 18/10)
+  const formattedSNo = String(nextSNo).padStart(2, '0');
+  const formattedMonth = String(monthInfo.numeric).padStart(2, '0');
+  const formattedEnrollmentNo = formattedSNo + '/' + formattedMonth;
 
   // 4. Prepare Row Values
   const sNo = nextSNo;
