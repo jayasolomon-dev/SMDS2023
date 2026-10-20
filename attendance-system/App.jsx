@@ -416,7 +416,7 @@ const normalizeStudent = (s) => {
     enrollmentNo: enrNo,
     username,
     password,
-    time: s.time || null,
+    time: (s.time === 'Unassigned' || s.time === '—') ? null : (s.time || null),
     type: t, 
     course: cleanCourse,
     attendanceLog: log,
@@ -499,7 +499,7 @@ export default function App() {
   // LocalStorage persistence for Trainees & Attendance
   const [students, setStudents] = useState(() => {
     try {
-      const saved = localStorage.getItem('smds_trainees_data_v10');
+      const saved = localStorage.getItem('smds_trainees_data_v11');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 50) {
@@ -527,7 +527,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('smds_trainees_data_v10', JSON.stringify(students));
+      localStorage.setItem('smds_trainees_data_v11', JSON.stringify(students));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -618,7 +618,7 @@ export default function App() {
 
   const attendanceHistory = useMemo(() => {
     try {
-      return JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+      return JSON.parse(localStorage.getItem('smds_attendance_history_v11') || '{}');
     } catch {
       return {};
     }
@@ -971,7 +971,7 @@ export default function App() {
       setLoggedInTrainee(updatedStudent);
     }
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v11') || '{}');
       if (updatedStudent.courseCompleted) {
         // Completely purge student from all dates in attendance register history
         Object.keys(history).forEach(d => {
@@ -991,7 +991,7 @@ export default function App() {
           else history[todayKey].push(item);
         }
       }
-      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v11', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1066,7 +1066,8 @@ export default function App() {
   // Only trainees who have an assigned slot in Schedule Master AND haven't completed their attendance (e.g. 21 days) sync to Daily Attendance Master
   const scheduledAttendanceStudents = useMemo(() => {
     return students.filter(s => {
-      if (!s.time) return false;
+      if (!s.time || s.time === 'Unassigned' || s.time === '—') return false;
+      if (s.courseCompleted) return false;
       const totalDays = Number(s.stats?.total || 21);
       const attended = Number(s.stats?.attended || 0);
       const isCompleted = attended >= totalDays && totalDays > 0;
@@ -1243,7 +1244,7 @@ export default function App() {
     const willComplete = targetStatus === 'present' && (existingPresent + 1) >= totalDays;
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v11') || '{}');
       if (willComplete) {
         // Class complete: completely purge trainee from attendance history / register across all dates!
         Object.keys(history).forEach(d => {
@@ -1264,7 +1265,7 @@ export default function App() {
           else history[targetKey].push(item);
         }
       }
-      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v11', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1498,7 +1499,7 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updatedTrainee.id ? updatedTrainee : s));
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v11') || '{}');
       if (isCompleted) {
         Object.keys(history).forEach(d => {
           if (Array.isArray(history[d])) {
@@ -1515,7 +1516,7 @@ export default function App() {
           history[todayKey].push({ id: updatedTrainee.id, status: 'present', time: updatedTrainee.time, checkInTime: timeStr });
         }
       }
-      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v11', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1546,10 +1547,10 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updatedTrainee.id ? updatedTrainee : s));
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v11') || '{}');
       if (history[todayKey]) {
         history[todayKey] = history[todayKey].filter(h => h.id !== updatedTrainee.id);
-        localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
+        localStorage.setItem('smds_attendance_history_v11', JSON.stringify(history));
       }
     } catch (e) {
       console.error(e);
@@ -1580,10 +1581,10 @@ export default function App() {
       setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
       if (loggedInTrainee && loggedInTrainee.id === updated.id) setLoggedInTrainee(updated);
       try {
-        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v11') || '{}');
         if (history[todayKey]) {
           history[todayKey] = history[todayKey].filter(h => h.id !== updated.id);
-          localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
+          localStorage.setItem('smds_attendance_history_v11', JSON.stringify(history));
         }
       } catch (e) {
         console.error(e);
@@ -1612,12 +1613,12 @@ export default function App() {
       setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
       if (loggedInTrainee && loggedInTrainee.id === updated.id) setLoggedInTrainee(updated);
       try {
-        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v11') || '{}');
         if (!history[todayKey]) history[todayKey] = [];
         const idx = history[todayKey].findIndex(h => h.id === updated.id);
         if (idx >= 0) history[todayKey][idx] = { id: updated.id, status: 'present', time: updated.time, checkInTime: timeStr };
         else history[todayKey].push({ id: updated.id, status: 'present', time: updated.time, checkInTime: timeStr });
-        localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
+        localStorage.setItem('smds_attendance_history_v11', JSON.stringify(history));
       } catch (e) {
         console.error(e);
       }
@@ -1860,11 +1861,11 @@ export default function App() {
   const handleRemoveFromSlot = (id) => {
     setStudents(prev => prev.map(s => {
       if (s.id === id) {
-        return { ...s, time: 'Unassigned' };
+        return { ...s, time: null };
       }
       return s;
     }));
-    showToast('Trainee removed from schedule slot!');
+    showToast('Trainee removed from attendance & schedule slot!');
     closeModal();
   };
 
@@ -3267,10 +3268,11 @@ export default function App() {
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveFromSlot(student.id)}
-                                  className="p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-transparent hover:border-rose-200 transition-colors cursor-pointer shadow-2xs"
-                                  title="Remove from Attendance (clear slot)"
+                                  className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                                  title="Delete Trainee from Attendance"
                                 >
-                                  <X className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-3.5 h-3.5 stroke-[2.2]" />
+                                  <span>Delete</span>
                                 </button>
                               </div>
                             </div>
