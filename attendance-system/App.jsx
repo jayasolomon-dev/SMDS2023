@@ -909,16 +909,27 @@ export default function App() {
         timestamp: now.getTime()
       };
       const wasPresent = student.status === 'present' || student.lastCheckInDate === todayKey;
-      const newAttended = Math.min((student.stats?.total || 21), (student.stats?.attended || 0) + (wasPresent ? 0 : 1));
+      const totalCourseDays = Number(student.stats?.total || 21);
+      const newAttended = Math.min(totalCourseDays, (student.stats?.attended || 0) + (wasPresent ? 0 : 1));
+      const isCourseCompleted = newAttended >= totalCourseDays;
+
       updatedStudent = {
         ...student,
-        status: 'present',
+        status: isCourseCompleted ? 'completed' : 'present',
+        time: isCourseCompleted ? null : student.time,
+        courseCompleted: isCourseCompleted,
+        completedAt: isCourseCompleted ? todayKey : student.completedAt,
         lastCheckInDate: todayKey,
         lastCheckInTime: timeStr,
         attendanceLog: [newEntry, ...filteredLog],
         stats: { ...student.stats, attended: newAttended }
       };
-      showToast(`Marked ${student.name} as Present ✓`);
+
+      if (isCourseCompleted) {
+        showToast(`🎉 ${student.name} completed all ${totalCourseDays} days attendance! Course closed & slot freed.`);
+      } else {
+        showToast(`Marked ${student.name} as Present ✓`);
+      }
     } else if (targetStatus === 'absent') {
       const newEntry = {
         date: todayKey,
@@ -1042,9 +1053,15 @@ export default function App() {
     };
   };
 
-  // Only trainees who have an assigned slot (active schedule) appear in Daily Attendance Master
+  // Only trainees who have an assigned slot in Schedule Master AND haven't completed their attendance (e.g. 21 days) sync to Daily Attendance Master
   const scheduledAttendanceStudents = useMemo(() => {
-    return students.filter(s => Boolean(s.time));
+    return students.filter(s => {
+      if (!s.time) return false;
+      const totalDays = Number(s.stats?.total || 21);
+      const attended = Number(s.stats?.attended || 0);
+      const isCompleted = attended >= totalDays && totalDays > 0;
+      return !isCompleted;
+    });
   }, [students]);
 
   // KPI Statistics for the selected Attendance Date (calculated for scheduled trainees only)
@@ -1181,10 +1198,16 @@ export default function App() {
 
         const attendedDays = newLog.filter(l => l.status === 'present').length;
         const missedDays = newLog.filter(l => l.status === 'absent').length;
+        const totalCourseDays = Number(student.stats?.total || 21);
+        const isCourseCompleted = targetStatus === 'present' && attendedDays >= totalCourseDays;
 
         const updated = {
           ...student,
-          status: newStatus,
+          status: isCourseCompleted ? 'completed' : newStatus,
+          // When 21 days attendance completes, automatically remove slot from schedule & attendance sheet!
+          time: isCourseCompleted ? null : student.time,
+          courseCompleted: isCourseCompleted,
+          completedAt: isCourseCompleted ? targetKey : (targetStatus === 'pending' ? null : student.completedAt),
           lastCheckInDate: lastDate,
           lastCheckInTime: lastTime,
           attendanceLog: newLog,
@@ -1220,8 +1243,17 @@ export default function App() {
       console.error(e);
     }
 
-    const stName = students.find(s => s.id === studentId)?.name || 'Trainee';
-    showToast(`${stName}: ${targetStatus === 'present' ? 'Marked Present ✓' : targetStatus === 'absent' ? 'Marked Absent ✕' : 'Attendance Cleared'}`);
+    const stStudent = students.find(s => s.id === studentId);
+    const stName = stStudent?.name || 'Trainee';
+    const totalDays = Number(stStudent?.stats?.total || 21);
+    const existingPresent = (Array.isArray(stStudent?.attendanceLog) ? stStudent.attendanceLog : []).filter(l => l.date !== targetKey && l.status === 'present').length;
+    const willComplete = targetStatus === 'present' && (existingPresent + 1) >= totalDays;
+
+    if (willComplete) {
+      showToast(`🎉 ${stName} has completed all ${totalDays} days attendance! Course closed and automatically removed from attendance sheet.`);
+    } else {
+      showToast(`${stName}: ${targetStatus === 'present' ? 'Marked Present ✓' : targetStatus === 'absent' ? 'Marked Absent ✕' : 'Attendance Cleared'}`);
+    }
   };
 
   // Bulk mark all scheduled trainees as present or absent for attendanceDateKey
@@ -1422,14 +1454,16 @@ export default function App() {
     };
 
     const updatedLog = [newLogEntry, ...existingLog];
-    const newAttended = Math.min(
-      (loggedInTrainee.stats?.total || 21),
-      (loggedInTrainee.stats?.attended || 0) + 1
-    );
+    const totalDays = Number(loggedInTrainee.stats?.total || 21);
+    const newAttended = Math.min(totalDays, (loggedInTrainee.stats?.attended || 0) + 1);
+    const isCompleted = newAttended >= totalDays;
 
     const updatedTrainee = {
       ...loggedInTrainee,
-      status: 'present',
+      status: isCompleted ? 'completed' : 'present',
+      time: isCompleted ? null : loggedInTrainee.time,
+      courseCompleted: isCompleted,
+      completedAt: isCompleted ? todayKey : loggedInTrainee.completedAt,
       lastCheckInDate: todayKey,
       lastCheckInTime: timeStr,
       attendanceLog: updatedLog,
