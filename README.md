@@ -26,7 +26,7 @@ npm run dev
 
 ### 2. Attendance System
 ```bash
-cd "attendance system"
+cd attendance-system
 npm install
 npm run dev
 ```

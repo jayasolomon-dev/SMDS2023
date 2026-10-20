@@ -6,18 +6,34 @@
  * Description: Connects the Attendance & Accounts Portal to Google Sheets in real-time.
  * 
  * FEATURES:
- * 1. Automatically maps Class Types according to SMDS rules:
- *    - 2 wh license (2500) -> SINGLE
- *    - 4 wh license (3000) -> SINGLE
- *    - 2 & 4 wh license (4500) -> SINGLE
- *    - 2 & 4 wh license with training (~8000) -> DOUBLE
- *    - 4 wh license with training (~8000) -> SINGLE
- *    - 21 days training (6000) -> TRAINNING ONLY
- *    - 10 days training (4000) -> TRAINNING ONLY
- * 2. Identifies current active Month Tab (JANUARY, FEBRUARY, MARCH, etc.)
- * 3. Auto-calculates next S.NO and appends new trainee row
- * 4. Recalculates Month Summary (Total Billed, Total Advance, Total Outstanding)
- * 5. Returns JSON response for instant UI confirmation in the React portal
+ * 1. Automatically maps Class Types according to SMDS Accounts Rules:
+ *    - 1. 2 wh license - 2500 (single)
+ *    - 2. 4 wh license - 3000 (single)
+ *    - 3. 2 & 4 wh license - 4500 (double)
+ *    - 4. 2 & 4 wh license with training - ~8000 (double)
+ *    - 5. 4 wh license with training - ~8000 (single)
+ *    - 6. 21 days training - 6000 (training only)
+ *    - 7. 10 days training - 4000 (training only)
+ * 2. Starts enrollment number fresh from 1 for each month:
+ *    - S.NO in Sheet: 1, 2, 3...
+ *    - Portal Enrollment No: S.NO / Current Month Numeric (e.g. 1/1, 2/1 in Jan; 1/10, 2/10 in Oct)
+ * 3. Identifies current active Month Tab (JANUARY, FEBRUARY, MARCH, etc.)
+ * 4. Recalculates Month Summary (Total Billed, Total Advance, Total Outstanding) at Row 2
+ * 5. Supports both doGet (Fetch/Ping) and doPost (Live Add Trainee & Update Payment)
+ * =========================================================================================
+ * 
+ * HOW TO DEPLOY:
+ * 1. Open your Google Sheet (ACCOUNTS SMDS 2026).
+ * 2. In top menu, click Extensions > Apps Script.
+ * 3. Delete any default code in Code.gs, paste this entire code, and press Save (Ctrl+S).
+ * 4. Click the blue "Deploy" button at top right > "New deployment".
+ * 5. Select type: "Web app".
+ * 6. Configuration:
+ *    - Description: "SMDS Live Portal Sync"
+ *    - Execute as: "Me (your google account)"
+ *    - Who has access: "Anyone" (Critical so portal can save data without Google login prompt)
+ * 7. Click "Deploy", authorize permissions when prompted, and copy the "Web app URL".
+ * 8. Paste that Web app URL into your Portal settings or keep it in localStorage as 'smds_sheets_sync_url'.
  * =========================================================================================
  */
 
@@ -39,6 +55,7 @@ function doGet(e) {
       return jsonResponse({
         status: 'success',
         message: 'SMDS Google Sheets Sync Service is active and ready!',
+        spreadsheet: SpreadsheetApp.getActiveSpreadsheet().getName(),
         timestamp: new Date().toISOString()
       });
     }
@@ -51,6 +68,20 @@ function doGet(e) {
       }
       const data = getTraineesFromSheet(sheet);
       return jsonResponse({ status: 'success', month: sheet.getName(), count: data.length, data: data });
+    }
+
+    if (action === 'get_all_months_summary') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const summary = [];
+      const sheets = ss.getSheets();
+      for (let i = 0; i < sheets.length; i++) {
+        const sName = sheets[i].getName();
+        const billed = Number(sheets[i].getRange(2, 5).getValue() || 0);
+        const collected = Number(sheets[i].getRange(2, 6).getValue() || 0);
+        const due = Number(sheets[i].getRange(2, 8).getValue() || 0);
+        summary.push({ month: sName, billed: billed, collected: collected, due: due });
+      }
+      return jsonResponse({ status: 'success', summary: summary });
     }
 
     return jsonResponse({ status: 'error', message: 'Unknown action: ' + action });
@@ -89,17 +120,17 @@ function doPost(e) {
 function handleAddTrainee(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. Determine Target Month
-  const targetMonth = determineMonth(data.startDate, data.month);
-  const sheet = getOrCreateMonthSheet(ss, targetMonth);
+  // 1. Determine Target Month and numeric month (1 to 12)
+  const monthInfo = determineMonthInfo(data.startDate || data.enrollmentDate, data.month);
+  const sheet = getOrCreateMonthSheet(ss, monthInfo.name);
 
-  // 2. Map Class Type & Days according to SMDS Rules
+  // 2. Map Class Type & Days according to SMDS 7 User Rules
   const mapped = mapClassTypeAndDays(data);
 
-  // 3. Find next available S NO and row index
+  // 3. Find next available S NO fresh from 1 for this month
   const lastRow = sheet.getLastRow();
   let nextSNo = 1;
-  let targetRow = 5; // Data starts at Row 5
+  let targetRow = 5; // Student data rows start at Row 5
 
   if (lastRow >= 5) {
     const sNoColumn = sheet.getRange(5, 1, lastRow - 4, 1).getValues();
@@ -118,13 +149,16 @@ function handleAddTrainee(data) {
     targetRow = lastRow + 1;
   }
 
+  // Enrollment Number format: S.NO / Current Month Numeric (eg. 1/1, 2/1, 1/10, 18/10)
+  const formattedEnrollmentNo = nextSNo + '/' + monthInfo.numeric;
+
   // 4. Prepare Row Values
   const sNo = nextSNo;
   const classDays = mapped.classDays || '';
   const name = (data.name || '').toUpperCase().trim();
   const classType = mapped.classType;
-  const feesAmount = Number(data.feesAmount || data.feesTotal || 0);
-  const advanceReceived = Number(data.advanceReceived || data.feesPaid || 0);
+  const feesAmount = Number(data.feesAmount || data.feesTotal || data.fees?.total || mapped.defaultFee || 0);
+  const advanceReceived = Number(data.advanceReceived || data.feesPaid || data.fees?.paid || 0);
   const outstandingAmount = Math.max(0, feesAmount - advanceReceived);
   
   // Format Pay Date (e.g. "UPI 20/10/26" or "CASH 20/10/26")
@@ -136,12 +170,17 @@ function handleAddTrainee(data) {
   }
 
   const remark = data.remark || mapped.remark || '';
-  const startDate = data.startDate ? formatInputDate(data.startDate) : formatDateDDMMYYYY(new Date());
-  const endDate = data.endDate ? formatInputDate(data.endDate) : calculateEndDate(startDate, classDays);
+  const startDate = data.startDate || data.enrollmentDate 
+    ? formatInputDate(data.startDate || data.enrollmentDate) 
+    : formatDateDDMMYYYY(new Date());
+  const endDate = data.endDate 
+    ? formatInputDate(data.endDate) 
+    : calculateEndDate(startDate, classDays);
   const contactNumber = String(data.phone || data.contactNumber || '').trim();
   const review = data.review || '';
 
-  // Write row: [S NO, CLS. DAYS, NAME, CLASS TYPE, FEES AMOUNT, ADVANCE RECEIVED, PAY-DATE, OUTSTANDING AMOUNT, REMARK, START, END, CONTACT NUMBER, REVIEW]
+  // Write row matching SMDS Sheet columns:
+  // [S NO, CLS. DAYS, NAME, CLASS TYPE, FEES AMOUNT, ADVANCE RECEIVED, PAY-DATE, OUTSTANDING AMOUNT, REMARK, START, END, CONTACT NUMBER, REVIEW]
   const rowData = [
     sNo,
     classDays,
@@ -175,7 +214,9 @@ function handleAddTrainee(data) {
     message: 'Trainee successfully added to ' + sheet.getName(),
     data: {
       sNo: sNo,
-      sheet: sheet.getName(),
+      enrollmentNo: formattedEnrollmentNo,
+      month: sheet.getName(),
+      monthNumeric: monthInfo.numeric,
       row: targetRow,
       name: name,
       classType: classType,
@@ -183,7 +224,9 @@ function handleAddTrainee(data) {
       feesAmount: feesAmount,
       advanceReceived: advanceReceived,
       outstandingAmount: outstandingAmount,
-      phone: contactNumber
+      phone: contactNumber,
+      startDate: startDate,
+      endDate: endDate
     }
   });
 }
@@ -193,11 +236,11 @@ function handleAddTrainee(data) {
  */
 function handleUpdatePayment(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const targetMonth = determineMonth(data.paymentDate, data.month);
-  const sheet = getMonthSheet(targetMonth);
+  const monthInfo = determineMonthInfo(data.paymentDate, data.month);
+  const sheet = getMonthSheet(monthInfo.name);
 
   if (!sheet) {
-    return jsonResponse({ status: 'error', message: 'Month sheet not found: ' + targetMonth });
+    return jsonResponse({ status: 'error', message: 'Month sheet not found: ' + monthInfo.name });
   }
 
   const lastRow = sheet.getLastRow();
@@ -208,12 +251,15 @@ function handleUpdatePayment(data) {
   const values = sheet.getRange(5, 1, lastRow - 4, 13).getValues();
   let foundRow = -1;
 
+  // Search by S NO (or enrollmentNo formatted like "1/10" or "1"), phone, or name
+  const targetSNo = data.sNo ? String(data.sNo).split('/')[0].trim() : (data.enrollmentNo ? String(data.enrollmentNo).split('/')[0].trim() : '');
+
   for (let i = 0; i < values.length; i++) {
     const rowSNo = String(values[i][0]).trim();
     const rowName = String(values[i][2]).toUpperCase().trim();
     const rowPhone = String(values[i][11]).trim();
 
-    if ((data.sNo && String(data.sNo).trim() === rowSNo) ||
+    if ((targetSNo && targetSNo === rowSNo) ||
         (data.phone && String(data.phone).trim() === rowPhone) ||
         (data.name && String(data.name).toUpperCase().trim() === rowName)) {
       foundRow = 5 + i;
@@ -227,7 +273,7 @@ function handleUpdatePayment(data) {
 
   const curFee = Number(sheet.getRange(foundRow, 5).getValue() || 0);
   const curAdvance = Number(sheet.getRange(foundRow, 6).getValue() || 0);
-  const additionalPaid = Number(data.additionalAmount || data.paidAmount || 0);
+  const additionalPaid = Number(data.additionalAmount || data.paidAmount || data.amount || 0);
   const newAdvance = curAdvance + additionalPaid;
   const newOutstanding = Math.max(0, curFee - newAdvance);
 
@@ -243,9 +289,10 @@ function handleUpdatePayment(data) {
 
   return jsonResponse({
     status: 'success',
-    message: 'Payment updated successfully',
+    message: 'Payment updated successfully in ' + sheet.getName(),
     data: {
       row: foundRow,
+      name: sheet.getRange(foundRow, 3).getValue(),
       newAdvance: newAdvance,
       newOutstanding: newOutstanding,
       payDate: updatedPayDate
@@ -254,92 +301,147 @@ function handleUpdatePayment(data) {
 }
 
 /**
- * SMDS CLASS TYPE & DAYS MAPPING LOGIC (USER SPECIFIED RULES)
+ * Read Trainees from a Sheet Tab
+ */
+function getTraineesFromSheet(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 5) return [];
+
+  const values = sheet.getRange(5, 1, lastRow - 4, 13).getValues();
+  const trainees = [];
+
+  for (let i = 0; i < values.length; i++) {
+    const sNo = values[i][0];
+    const name = values[i][2];
+    if (!name || String(name).trim() === '') continue;
+
+    trainees.push({
+      sNo: sNo,
+      classDays: values[i][1],
+      name: String(name).trim(),
+      classType: values[i][3],
+      feesAmount: Number(values[i][4] || 0),
+      advanceReceived: Number(values[i][5] || 0),
+      payDate: String(values[i][6] || ''),
+      outstandingAmount: Number(values[i][7] || 0),
+      remark: String(values[i][8] || ''),
+      startDate: String(values[i][9] || ''),
+      endDate: String(values[i][10] || ''),
+      contactNumber: String(values[i][11] || ''),
+      review: String(values[i][12] || '')
+    });
+  }
+
+  return trainees;
+}
+
+/**
+ * =========================================================================================
+ * SMDS CLASS TYPE & DAYS MAPPING LOGIC (EXACT USER RULES)
+ * -----------------------------------------------------------------------------------------
  * 1. 2 wh license - 2500 (single)
  * 2. 4 wh license - 3000 (single)
- * 3. 2 & 4 wh license - 4500 (single)
+ * 3. 2 & 4 wh license - 4500 (double)
  * 4. 2 & 4 wh license with training - ~8000 (double)
  * 5. 4 wh license with training - ~8000 (single)
  * 6. 21 days training - 6000 (training only)
  * 7. 10 days training - 4000 (training only)
+ * =========================================================================================
  */
 function mapClassTypeAndDays(data) {
   const pkgId = String(data.packageId || data.type || '').toLowerCase();
-  const fee = Number(data.feesAmount || data.feesTotal || 0);
+  const fee = Number(data.feesAmount || data.feesTotal || data.fees?.total || 0);
   const daysSpecified = parseInt(data.days || data.classDays) || 0;
-  const categorySpecified = (data.classType || '').toUpperCase();
+  const categorySpecified = String(data.classType || '').toUpperCase().trim();
 
-  // If already directly specified as SINGLE / DOUBLE / TRAINNING ONLY
-  if (categorySpecified === 'TRAINNING ONLY' || categorySpecified === 'TRAINING ONLY') {
-    return {
-      classType: 'TRAINNING ONLY',
-      classDays: daysSpecified || (fee <= 4000 ? 10 : 21),
-      remark: 'TRAINNING ONLY'
-    };
+  // If already directly specified as TRAINNING ONLY
+  if (categorySpecified === 'TRAINNING ONLY' || categorySpecified === 'TRAINING ONLY' || pkgId === 'item_12' || pkgId === 'item_13') {
+    if (daysSpecified === 10 || fee <= 4000 || pkgId === 'item_13') {
+      return { classType: 'TRAINNING ONLY', classDays: 10, remark: 'TRAINNING ONLY', defaultFee: 4000 };
+    }
+    return { classType: 'TRAINNING ONLY', classDays: 21, remark: 'TRAINNING ONLY', defaultFee: 6000 };
   }
 
-  // 1. 10 Days Training Only
-  if (pkgId === 'item_13' || daysSpecified === 10 || (fee <= 4000 && categorySpecified.includes('TRAIN'))) {
-    return { classType: 'TRAINNING ONLY', classDays: 10, remark: 'TRAINNING ONLY' };
+  // Rule 6: 21 days training - 6000 (training only)
+  if (pkgId === 'item_12' || (daysSpecified === 21 && fee === 6000)) {
+    return { classType: 'TRAINNING ONLY', classDays: 21, remark: 'TRAINNING ONLY', defaultFee: 6000 };
   }
 
-  // 2. 21 Days Training Only
-  if (pkgId === 'item_12' || (daysSpecified === 21 && (fee === 6000 || categorySpecified.includes('TRAIN')))) {
-    return { classType: 'TRAINNING ONLY', classDays: 21, remark: 'TRAINNING ONLY' };
+  // Rule 7: 10 days training - 4000 (training only)
+  if (pkgId === 'item_13' || (daysSpecified === 10 && fee <= 4000)) {
+    return { classType: 'TRAINNING ONLY', classDays: 10, remark: 'TRAINNING ONLY', defaultFee: 4000 };
   }
 
-  // 3. 2 & 4 wh license with training (DOUBLE ~8000)
-  if (pkgId === 'item_8' || categorySpecified === 'DOUBLE') {
-    return { classType: 'DOUBLE', classDays: 21, remark: '' };
+  // Rule 4: 2 & 4 wh license with training - 8000 or nearly 8000 (double)
+  if (pkgId === 'item_8' || (categorySpecified === 'DOUBLE' && (fee >= 6500 || daysSpecified === 21))) {
+    return { classType: 'DOUBLE', classDays: 21, remark: '', defaultFee: fee || 8000 };
   }
 
-  // 4. 4 wh license with training (SINGLE ~8000)
-  if (pkgId === 'item_8_single' || (fee >= 7000 && categorySpecified === 'SINGLE')) {
-    return { classType: 'SINGLE', classDays: 21, remark: '' };
+  // Rule 3: 2 & 4 wh license - 4500 (double)
+  if (pkgId === 'item_3' || (categorySpecified === 'DOUBLE' && fee < 6500) || (fee >= 4200 && fee <= 5000 && categorySpecified !== 'SINGLE')) {
+    return { classType: 'DOUBLE', classDays: '', remark: '', defaultFee: fee || 4500 };
   }
 
-  // 5. 2 & 4 wh license Only (SINGLE 4500)
-  if (pkgId === 'item_3' || (fee >= 4000 && fee <= 5000)) {
-    return { classType: 'SINGLE', classDays: '', remark: '' };
+  // Rule 5: 4 wh license with training - 8000 or nearly 8000 (single)
+  if (pkgId === 'item_8_single' || (categorySpecified === 'SINGLE' && (fee >= 7000 || daysSpecified === 21))) {
+    return { classType: 'SINGLE', classDays: 21, remark: '', defaultFee: fee || 8000 };
   }
 
-  // 6. 4 wh license Only (SINGLE 3000)
+  // Rule 2: 4 wh license - 3000 (single)
   if (pkgId === 'item_2' || (fee > 2500 && fee <= 3500)) {
-    return { classType: 'SINGLE', classDays: '', remark: '' };
+    return { classType: 'SINGLE', classDays: '', remark: '', defaultFee: fee || 3000 };
   }
 
-  // 7. 2 wh license Only (SINGLE 2500)
+  // Rule 1: 2 wh license - 2500 (single)
   if (pkgId === 'item_1' || fee <= 2500) {
-    return { classType: 'SINGLE', classDays: '', remark: '' };
+    return { classType: 'SINGLE', classDays: '', remark: '', defaultFee: fee || 2500 };
   }
 
-  // Default fallback
-  return { classType: 'SINGLE', classDays: daysSpecified || '', remark: '' };
+  // Default fallback based on category
+  if (categorySpecified === 'DOUBLE') {
+    return { classType: 'DOUBLE', classDays: daysSpecified || 21, remark: '', defaultFee: fee || 8000 };
+  }
+
+  return { classType: 'SINGLE', classDays: daysSpecified || '', remark: '', defaultFee: fee || 3000 };
 }
 
 /**
- * Determine Month Name from start date or explicit parameter
+ * Determine Month Name & numeric index (1 to 12) from input date or string
  */
-function determineMonth(dateInput, monthInput) {
-  if (monthInput && MONTH_NAMES.indexOf(monthInput.toUpperCase()) !== -1) {
-    return monthInput.toUpperCase();
+function determineMonthInfo(dateInput, monthInput) {
+  // If month string like "JANUARY" or "10" passed directly
+  if (monthInput) {
+    const upper = String(monthInput).toUpperCase();
+    const idx = MONTH_NAMES.indexOf(upper);
+    if (idx !== -1) {
+      return { name: upper, numeric: idx + 1 };
+    }
+    const num = parseInt(monthInput, 10);
+    if (!isNaN(num) && num >= 1 && num <= 12) {
+      return { name: MONTH_NAMES[num - 1], numeric: num };
+    }
   }
 
+  // Extract from date input
   if (dateInput) {
-    // If date is "DD/MM/YYYY" or "YYYY-MM-DD"
     let d;
     if (typeof dateInput === 'string' && dateInput.includes('/')) {
       const parts = dateInput.split('/');
-      d = new Date(parts[2], parts[1] - 1, parts[0]);
+      // Expecting DD/MM/YYYY
+      d = new Date(parts[2], parseInt(parts[1], 10) - 1, parts[0]);
     } else {
       d = new Date(dateInput);
     }
     if (!isNaN(d.getTime())) {
-      return MONTH_NAMES[d.getMonth()];
+      const monthIdx = d.getMonth();
+      return { name: MONTH_NAMES[monthIdx], numeric: monthIdx + 1 };
     }
   }
 
-  return getCurrentMonthName();
+  // Fallback to current date
+  const now = new Date();
+  const curIdx = now.getMonth();
+  return { name: MONTH_NAMES[curIdx], numeric: curIdx + 1 };
 }
 
 function getCurrentMonthName() {
@@ -434,7 +536,7 @@ function formatInputDate(str) {
   if (str.includes('-')) {
     const parts = str.split('-');
     if (parts[0].length === 4) {
-      // YYYY-MM-DD
+      // YYYY-MM-DD -> DD/MM/YYYY
       return parts[2] + '/' + parts[1] + '/' + parts[0];
     }
   }
@@ -448,7 +550,7 @@ function calculateEndDate(startStr, days) {
   if (!startStr) return '';
   const parts = startStr.split('/');
   if (parts.length < 3) return '';
-  const d = new Date(parts[2], parts[1] - 1, parts[0]);
+  const d = new Date(parts[2], parseInt(parts[1], 10) - 1, parts[0]);
   const addDays = (parseInt(days) === 10) ? 15 : 30; // standard 1 month duration
   d.setDate(d.getDate() + addDays);
   return formatDateDDMMYYYY(d);

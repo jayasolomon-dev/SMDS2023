@@ -55,14 +55,15 @@ import {
 import { INITIAL_STUDENTS } from './initialStudents.js';
 
 const getTraineeUsername = (enrollmentNo) => {
-  const num = String(enrollmentNo || '').replace(/\D/g, '') || '1';
-  return `SMDS${num}`;
+  const clean = String(enrollmentNo || '').replace(/[^0-9/]/g, '') || '1';
+  return `SMDS${clean}`;
 };
 
 const getTraineePassword = (enrollmentNo) => {
-  const num = String(enrollmentNo || '').replace(/\D/g, '') || '1';
-  return `smds@${num}`;
+  const clean = String(enrollmentNo || '').replace(/[^0-9/]/g, '') || '1';
+  return `smds@${clean}`;
 };
+
 
 const getTodayKey = () => {
   const d = new Date();
@@ -165,11 +166,11 @@ export const DRIVING_PACKAGES = {
     itemNo: 'ITEM #3',
     duration: 'RTO PROCESS',
     category: 'LICENCE',
-    sheetCategory: 'SINGLE',
+    sheetCategory: 'DOUBLE',
     badge: 'COMBO DL',
     badgeBg: 'bg-orange-500 text-white',
-    title: '2 & 4 wh license - 4500 (single)',
-    short: '2W & 4W Licence (single)',
+    title: '2 & 4 wh license - 4500 (double)',
+    short: '2W & 4W Licence (double)',
     full: 'Two Wheeler & Four Wheeler Licence Only',
     subtitle: 'LLR, Slot Booking, Document Scrutiny & RTO Test Representation',
     features: 'LLR, Slot Booking, Document Scrutiny & RTO Test Representation',
@@ -504,7 +505,7 @@ export default function App() {
   // LocalStorage persistence for Trainees & Attendance
   const [students, setStudents] = useState(() => {
     try {
-      const saved = localStorage.getItem('smds_trainees_data_v5');
+      const saved = localStorage.getItem('smds_trainees_data_v6');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 50) {
@@ -532,7 +533,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('smds_trainees_data_v5', JSON.stringify(students));
+      localStorage.setItem('smds_trainees_data_v6', JSON.stringify(students));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -1297,8 +1298,9 @@ export default function App() {
     // 2. Check Trainee Credentials against registered students
     const matched = students.find(s => {
       const u = (s.username || getTraineeUsername(s.enrollmentNo)).toUpperCase();
+      const rawEnr = String(s.enrollmentNo || '').toUpperCase();
       const p = s.password || getTraineePassword(s.enrollmentNo);
-      return u === cleanUser && p === cleanPass;
+      return (u === cleanUser || rawEnr === cleanUser) && p === cleanPass;
     });
 
     if (matched) {
@@ -1546,11 +1548,22 @@ export default function App() {
         paymentNote: ''
       });
     } else {
-      const maxNum = students.reduce((max, s) => {
-        const num = parseInt(String(s.enrollmentNo || s.id || '').replace(/\D/g, '') || '0', 10);
-        return Math.max(max, isNaN(num) ? 0 : num);
-      }, 0);
-      const nextEnr = String(maxNum + 1);
+      const curMonthNum = (accountsPeriodScope === 'monthly' && typeof accountsSelectedMonth === 'number')
+        ? accountsSelectedMonth + 1
+        : (new Date().getMonth() + 1);
+
+      let maxMonthSNo = 0;
+      students.forEach(s => {
+        const enr = String(s.enrollmentNo || '');
+        if (enr.includes('/')) {
+          const [sNoStr, mStr] = enr.split('/');
+          if (parseInt(mStr, 10) === curMonthNum) {
+            const val = parseInt(sNoStr, 10);
+            if (!isNaN(val) && val > maxMonthSNo) maxMonthSNo = val;
+          }
+        }
+      });
+      const nextEnr = `${maxMonthSNo + 1}/${curMonthNum}`;
       setFormData({ 
         enrollmentNo: nextEnr, 
         name: '', phone: '', course: 'Light Motor Vehicle (LMV)', type: 'item_8', 
@@ -1578,8 +1591,8 @@ export default function App() {
       const newId = `ST-${String(maxNum + 1).padStart(3, '0')}`;
       const initials = formData.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
       const classCfg = CLASS_TYPES[formData.type] || CLASS_TYPES['21d_license'];
-      const rawNum = String(formData.enrollmentNo || '').replace(/\D/g, '').trim();
-      const finalEnr = rawNum ? String(parseInt(rawNum, 10)) : String(maxNum + 1);
+      const rawNum = String(formData.enrollmentNo || '').replace(/[^0-9/]/g, '').trim();
+      const finalEnr = rawNum || String(maxNum + 1);
       const genUser = getTraineeUsername(finalEnr);
       const genPass = getTraineePassword(finalEnr);
       const paidAdvance = Number(formData.paidFees) || 0;
@@ -1629,10 +1642,10 @@ export default function App() {
 
       showToast(`New trainee registered (No. ${finalEnr} | Login: ${genUser})!`);
     } else if (modalConfig.mode === 'edit' || modalConfig.mode === 'reschedule') {
-      const rawNum = String(formData.enrollmentNo || '').replace(/\D/g, '').trim();
+      const rawNum = String(formData.enrollmentNo || '').replace(/[^0-9/]/g, '').trim();
       setStudents(students.map(s => {
         if (s.id === modalConfig.data.id) {
-          const finalEnr = rawNum ? String(parseInt(rawNum, 10)) : s.enrollmentNo;
+          const finalEnr = rawNum || s.enrollmentNo;
           const newTot = Math.max(0, Number(formData.totalFees) || 0);
           const newPaid = Math.max(0, Number(formData.paidFees) || 0);
           let currentHistory = Array.isArray(s.fees?.history) ? [...s.fees.history] : [];
@@ -5126,16 +5139,15 @@ export default function App() {
                             <span className="text-[10px] text-orange-600 font-bold uppercase tracking-wider">Step 1</span>
                           </label>
                           <input 
-                            type="number" 
-                            min="1"
+                            type="text" 
                             required 
                             value={formData.enrollmentNo || ''} 
-                            onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value.replace(/\D/g, '') })}
+                            onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value.replace(/[^0-9/]/g, '') })}
                             className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-black text-slate-900 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all font-mono placeholder:normal-case placeholder:font-normal placeholder:text-slate-400"
-                            placeholder="e.g. 101, 1, 25"
+                            placeholder="e.g. 1/10, 2/10, 1/1"
                           />
                           <p className="text-[11px] font-bold text-slate-400 mt-1 pl-1">
-                            Enter the trainee's enrollment number first, then fill other details below
+                            Format: S.NO / Current Month Numeric (e.g. 1/10 for 1st student of October)
                           </p>
 
                           {/* Portal Credentials Live Preview (Clean White Theme) */}
@@ -5479,16 +5491,15 @@ export default function App() {
                             <span className="text-[10px] text-orange-600 font-bold uppercase tracking-wider">Step 1</span>
                           </label>
                           <input 
-                            type="number" 
-                            min="1"
+                            type="text" 
                             required 
                             value={formData.enrollmentNo || ''} 
-                            onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value.replace(/\D/g, '') })}
+                            onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value.replace(/[^0-9/]/g, '') })}
                             className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-black text-slate-900 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all font-mono placeholder:normal-case placeholder:font-normal placeholder:text-slate-400"
-                            placeholder="e.g. 101, 1, 25"
+                            placeholder="e.g. 1/10, 2/10, 1/1"
                           />
                           <p className="text-[11px] font-bold text-slate-400 mt-1 pl-1">
-                            Enter the trainee's enrollment number first, then fill other details below
+                            Format: S.NO / Current Month Numeric (e.g. 1/10 for 1st student of October)
                           </p>
 
                           {/* Portal Credentials Live Preview (Clean White Theme) */}
