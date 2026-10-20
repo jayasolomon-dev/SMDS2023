@@ -386,31 +386,9 @@ const normalizeStudent = (s) => {
   const todayKey = getTodayKey();
 
   let log = Array.isArray(s.attendanceLog) ? s.attendanceLog : [];
-  if (log.length === 0 && (s.stats?.attended || 0) > 0) {
-    const count = Math.min(s.stats?.attended || 0, 5);
-    const mockLog = [];
-    const today = new Date();
-    for (let i = count; i >= 1; i--) {
-      const pastDate = new Date(today);
-      pastDate.setDate(today.getDate() - i);
-      const y = pastDate.getFullYear();
-      const m = String(pastDate.getMonth() + 1).padStart(2, '0');
-      const d = String(pastDate.getDate()).padStart(2, '0');
-      mockLog.push({
-        date: `${y}-${m}-${d}`,
-        formattedDate: pastDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-        time: s.time || '06:00 AM',
-        slot: s.time || '06:00 AM',
-        status: 'present',
-        timestamp: pastDate.getTime()
-      });
-    }
-    log = mockLog;
-  }
-
-  const isPresentToday = s.status === 'present' || log.some(item => item.date === todayKey);
-  const lastCheckInDate = s.lastCheckInDate || (isPresentToday ? todayKey : null);
-  const lastCheckInTime = s.lastCheckInTime || (isPresentToday ? (s.time || '06:00 AM') : null);
+  const isPresentToday = (s.status === 'present' || log.some(item => item.date === todayKey)) && s.lastCheckInDate === todayKey;
+  const lastCheckInDate = s.lastCheckInDate || null;
+  const lastCheckInTime = s.lastCheckInTime || null;
 
   const currentPaid = Number(s.fees?.paid !== undefined ? s.fees.paid : 0);
   const currentTotal = Number(s.fees?.total || (pkgDetails?.defaultFee || 8000));
@@ -438,6 +416,7 @@ const normalizeStudent = (s) => {
     enrollmentNo: enrNo,
     username,
     password,
+    time: s.time || null,
     type: t, 
     course: cleanCourse,
     attendanceLog: log,
@@ -445,8 +424,9 @@ const normalizeStudent = (s) => {
     lastCheckInTime,
     status: isPresentToday ? 'present' : (s.status === 'absent' ? 'absent' : 'pending'),
     stats: {
-      ...s.stats,
-      total: s.stats?.total || days
+      total: s.stats?.total || days,
+      attended: s.stats?.attended || 0,
+      missed: s.stats?.missed || 0
     },
     fees: normalizedFees
   };
@@ -519,7 +499,7 @@ export default function App() {
   // LocalStorage persistence for Trainees & Attendance
   const [students, setStudents] = useState(() => {
     try {
-      const saved = localStorage.getItem('smds_trainees_data_v8');
+      const saved = localStorage.getItem('smds_trainees_data_v9');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 50) {
@@ -547,7 +527,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('smds_trainees_data_v8', JSON.stringify(students));
+      localStorage.setItem('smds_trainees_data_v9', JSON.stringify(students));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -638,7 +618,7 @@ export default function App() {
 
   const attendanceHistory = useMemo(() => {
     try {
-      return JSON.parse(localStorage.getItem('smds_attendance_history') || '{}');
+      return JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
     } catch {
       return {};
     }
@@ -756,7 +736,8 @@ export default function App() {
     const allDueCount = students.length - allSettledCount;
 
     // 2. Monthly totals (for selectedMonthKey, e.g. '2026-10')
-    const monthlyStudents = students.filter(s => (s.enrollmentDate || '').startsWith(selectedMonthKey));
+    const curMonthSuffix = `/${String(accountsSelectedMonth + 1).padStart(2, '0')}`;
+    const monthlyStudents = students.filter(s => (s.enrollmentDate || '').startsWith(selectedMonthKey) || (s.enrollmentNo && String(s.enrollmentNo).endsWith(curMonthSuffix)));
     const monthlyBilled = monthlyStudents.reduce((sum, s) => sum + Number(s.fees?.total || 0), 0);
     const monthlyPaid = students.reduce((sum, s) => {
       const hist = Array.isArray(s.fees?.history) ? s.fees.history : [];
@@ -870,6 +851,8 @@ export default function App() {
   }, [students, selectedMonthKey, selectedYearKey, accountsPeriodScope]);
 
   const accountsDisplayStudents = useMemo(() => {
+    const curMonthSuffix = `/${String(accountsSelectedMonth + 1).padStart(2, '0')}`;
+
     return students.filter(student => {
       const q = accountsSearchTerm.toLowerCase().trim();
       const uName = (student.username || getTraineeUsername(student.enrollmentNo)).toLowerCase();
@@ -889,17 +872,24 @@ export default function App() {
                             (accountsPackageFilter === 'item_12' && student.type === '21d_training') ||
                             (accountsPackageFilter === 'item_13' && student.type === '10d_training');
 
+      // Month/Period Filtering based on top ledger ribbon
+      const matchesPeriod = accountsStatusFilter === 'all_time' ? true : (
+        accountsPeriodScope === 'monthly'
+          ? ((student.enrollmentDate || '').startsWith(selectedMonthKey) || (student.enrollmentNo && String(student.enrollmentNo).endsWith(curMonthSuffix)))
+          : accountsPeriodScope === 'yearly'
+          ? ((student.enrollmentDate || '').startsWith(selectedYearKey))
+          : true
+      );
+
       const balance = (Number(student.fees?.total || 0)) - (Number(student.fees?.paid || 0));
       const isSettled = Number(student.fees?.total || 0) > 0 && balance <= 0;
-      const matchesStatus = accountsStatusFilter === 'all' ||
+      const matchesStatus = (accountsStatusFilter === 'all' || accountsStatusFilter === 'all_time') ||
                             (accountsStatusFilter === 'due' && balance > 0) ||
-                            (accountsStatusFilter === 'settled' && isSettled) ||
-                            (accountsStatusFilter === 'month' && (student.enrollmentDate || '').startsWith(selectedMonthKey)) ||
-                            (accountsStatusFilter === 'year' && (student.enrollmentDate || '').startsWith(selectedYearKey));
+                            (accountsStatusFilter === 'settled' && isSettled);
 
-      return matchesSearch && matchesPackage && matchesStatus;
+      return matchesPeriod && matchesSearch && matchesPackage && matchesStatus;
     });
-  }, [students, accountsSearchTerm, accountsPackageFilter, accountsStatusFilter, selectedMonthKey, selectedYearKey]);
+  }, [students, accountsSearchTerm, accountsPackageFilter, accountsStatusFilter, accountsPeriodScope, accountsSelectedMonth, selectedMonthKey, selectedYearKey]);
 
   const handleQuickLog = (student, targetStatus) => {
     const now = new Date();
@@ -970,7 +960,7 @@ export default function App() {
       setLoggedInTrainee(updatedStudent);
     }
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
       if (!history[todayKey]) history[todayKey] = [];
       const idx = history[todayKey].findIndex(h => h.id === updatedStudent.id);
       if (targetStatus === 'pending') {
@@ -980,7 +970,7 @@ export default function App() {
         if (idx >= 0) history[todayKey][idx] = item;
         else history[todayKey].push(item);
       }
-      localStorage.setItem('smds_attendance_history', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1000,11 +990,11 @@ export default function App() {
     if (log) {
       const validTime = (log.time && log.time !== 'Absent' && log.time !== 'Missed Session') 
         ? log.time 
-        : (student.lastCheckInTime && student.lastCheckInTime !== 'Absent' ? student.lastCheckInTime : (log.slot || student.time || '06:00 AM'));
+        : (student.lastCheckInTime && student.lastCheckInTime !== 'Absent' ? student.lastCheckInTime : (log.slot || student.time || '—'));
       return {
         status: log.status,
         time: validTime,
-        slot: log.slot || student.time || '06:00 AM',
+        slot: log.slot || student.time || 'Unscheduled',
         formattedDate: log.formattedDate || dateKey,
         isRecorded: true
       };
@@ -1015,21 +1005,21 @@ export default function App() {
       if (entry) {
         const validTime = (entry.checkInTime && entry.checkInTime !== 'Absent') 
           ? entry.checkInTime 
-          : (entry.time || student.time || '06:00 AM');
+          : (entry.time || student.time || '—');
         return {
           status: entry.status,
           time: validTime,
-          slot: entry.time || student.time || '06:00 AM',
+          slot: entry.time || student.time || 'Unscheduled',
           formattedDate: dateKey,
           isRecorded: true
         };
       }
     }
-    if (dateKey === todayKey && (student.status === 'present' || student.lastCheckInDate === todayKey)) {
+    if (dateKey === todayKey && (student.status === 'present' || (student.lastCheckInDate === todayKey && student.status !== 'absent'))) {
       return {
         status: 'present',
-        time: student.lastCheckInTime || student.time || '06:00 AM',
-        slot: student.time || '06:00 AM',
+        time: student.lastCheckInTime || student.time || '—',
+        slot: student.time || 'Unscheduled',
         formattedDate: dateKey,
         isRecorded: true
       };
@@ -1037,16 +1027,16 @@ export default function App() {
     if (dateKey === todayKey && student.status === 'absent') {
       return {
         status: 'absent',
-        time: (student.lastCheckInTime && student.lastCheckInTime !== 'Absent') ? student.lastCheckInTime : (student.time || '10:00 AM'),
-        slot: student.time || '06:00 AM',
+        time: (student.lastCheckInTime && student.lastCheckInTime !== 'Absent') ? student.lastCheckInTime : 'Absent',
+        slot: student.time || 'Unscheduled',
         formattedDate: dateKey,
         isRecorded: true
       };
     }
     return {
       status: 'pending',
-      time: student.time || '06:00 AM',
-      slot: student.time || '06:00 AM',
+      time: student.time || '—',
+      slot: student.time || 'Unscheduled',
       formattedDate: dateKey,
       isRecorded: false
     };
@@ -1209,7 +1199,7 @@ export default function App() {
     });
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
       if (!history[targetKey]) history[targetKey] = [];
       const idx = history[targetKey].findIndex(h => h.id === studentId);
       if (targetStatus === 'pending') {
@@ -1220,7 +1210,7 @@ export default function App() {
         if (idx >= 0) history[targetKey][idx] = item;
         else history[targetKey].push(item);
       }
-      localStorage.setItem('smds_attendance_history', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1445,7 +1435,7 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updatedTrainee.id ? updatedTrainee : s));
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
       if (!history[todayKey]) history[todayKey] = [];
       const idx = history[todayKey].findIndex(h => h.id === updatedTrainee.id);
       if (idx >= 0) {
@@ -1453,7 +1443,7 @@ export default function App() {
       } else {
         history[todayKey].push({ id: updatedTrainee.id, status: 'present', time: updatedTrainee.time, checkInTime: timeStr });
       }
-      localStorage.setItem('smds_attendance_history', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1484,10 +1474,10 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updatedTrainee.id ? updatedTrainee : s));
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
       if (history[todayKey]) {
         history[todayKey] = history[todayKey].filter(h => h.id !== updatedTrainee.id);
-        localStorage.setItem('smds_attendance_history', JSON.stringify(history));
+        localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
       }
     } catch (e) {
       console.error(e);
@@ -1518,10 +1508,10 @@ export default function App() {
       setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
       if (loggedInTrainee && loggedInTrainee.id === updated.id) setLoggedInTrainee(updated);
       try {
-        const history = JSON.parse(localStorage.getItem('smds_attendance_history') || '{}');
+        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
         if (history[todayKey]) {
           history[todayKey] = history[todayKey].filter(h => h.id !== updated.id);
-          localStorage.setItem('smds_attendance_history', JSON.stringify(history));
+          localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
         }
       } catch (e) {
         console.error(e);
@@ -1550,12 +1540,12 @@ export default function App() {
       setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
       if (loggedInTrainee && loggedInTrainee.id === updated.id) setLoggedInTrainee(updated);
       try {
-        const history = JSON.parse(localStorage.getItem('smds_attendance_history') || '{}');
+        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
         if (!history[todayKey]) history[todayKey] = [];
         const idx = history[todayKey].findIndex(h => h.id === updated.id);
         if (idx >= 0) history[todayKey][idx] = { id: updated.id, status: 'present', time: updated.time, checkInTime: timeStr };
         else history[todayKey].push({ id: updated.id, status: 'present', time: updated.time, checkInTime: timeStr });
-        localStorage.setItem('smds_attendance_history', JSON.stringify(history));
+        localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
       } catch (e) {
         console.error(e);
       }
@@ -1598,13 +1588,14 @@ export default function App() {
       const nextSNoPadded = String(maxMonthSNo + 1).padStart(2, '0');
       const monthPadded = String(curMonthNum).padStart(2, '0');
       const nextEnr = `${nextSNoPadded}/${monthPadded}`;
+      const defaultDate = `${accountsSelectedYear || 2026}-${monthPadded}-01`;
       setFormData({ 
         enrollmentNo: nextEnr, 
         name: '', phone: '', course: 'Light Motor Vehicle (LMV)', type: 'item_8', 
-        time: data?.time || '06:00 AM', 
+        time: data?.time || null, 
         totalFees: 8000, paidFees: 0, paymentAmount: '',
         paymentMethod: 'Cash',
-        paymentDate: getTodayKey(),
+        paymentDate: defaultDate,
         paymentNote: ''
       });
     }
@@ -1638,18 +1629,26 @@ export default function App() {
       const genPass = getTraineePassword(finalEnr);
       const paidAdvance = Number(formData.paidFees) || 0;
       const advMethod = formData.paymentMethod || 'Cash';
-      const advDate = formData.paymentDate || getTodayKey();
+      const defaultEnrollDate = (accountsPeriodScope === 'monthly' && typeof accountsSelectedMonth === 'number')
+        ? `${accountsSelectedYear || 2026}-${String(accountsSelectedMonth + 1).padStart(2, '0')}-01`
+        : getTodayKey();
+      const advDate = formData.paymentDate || defaultEnrollDate;
       
       const newStudent = {
         ...formData,
         id: newId,
         enrollmentNo: finalEnr,
+        enrollmentDate: advDate,
         username: genUser,
         password: genPass,
         initials: initials || 'ST',
         status: 'pending',
+        time: formData.time || null,
         avatarColor: COLORS[Math.floor(Math.random() * COLORS.length)],
         stats: { total: classCfg.days, attended: 0, missed: 0 },
+        attendanceLog: [],
+        lastCheckInDate: null,
+        lastCheckInTime: null,
         fees: { 
           total: Number(formData.totalFees), 
           paid: paidAdvance,
@@ -2720,18 +2719,30 @@ export default function App() {
                               ))}
                             </div>
                           ) : (
-                            <div className="flex-1 h-18 sm:h-20 rounded-2xl border-2 border-dashed border-slate-200/90 bg-slate-50/30 px-6 py-3 flex items-center justify-between">
+                            <div className="flex-1 h-18 sm:h-20 rounded-2xl border-2 border-dashed border-slate-200/90 bg-slate-50/30 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
                               <span className="text-slate-400 font-semibold italic text-xs sm:text-sm">
                                 Slot Available
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => openModal('add', { time: slot })}
-                                className="bg-[#0B1528] hover:bg-slate-800 text-white font-black text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Assign Trainee</span>
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openModal('assign_slot', { time: slot })}
+                                  className="bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/90 font-black text-xs px-3.5 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                  title="Assign an existing registered trainee to this slot"
+                                >
+                                  <Users className="w-3.5 h-3.5 text-orange-600" />
+                                  <span>Assign Trainee</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openModal('add', { time: slot })}
+                                  className="bg-[#0B1528] hover:bg-slate-800 text-white font-black text-xs px-3.5 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                  title="Register and schedule a new trainee"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Add New</span>
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -3654,59 +3665,88 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Quick Fee Status Filter Pills */}
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    <button
-                      type="button"
-                      onClick={() => setAccountsStatusFilter('all')}
-                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 ${
-                        accountsStatusFilter === 'all'
-                          ? 'bg-slate-900 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                      }`}
-                    >
-                      All Trainees ({students.length})
-                    </button>
+                  {/* Quick Fee Status Filter Pills & Dynamic Period Scope */}
+                  {(() => {
+                    const isM = accountsPeriodScope === 'monthly';
+                    const isY = accountsPeriodScope === 'yearly';
+                    const activeScopeData = isM ? accountsStats.monthly : isY ? accountsStats.yearly : accountsStats.allTime;
+                    const periodPillTitle = isM 
+                      ? `${MONTH_NAMES[accountsSelectedMonth]} Trainees (${activeScopeData.traineesCount})`
+                      : isY 
+                      ? `${accountsSelectedYear} Trainees (${activeScopeData.traineesCount})`
+                      : `All-Time (${students.length})`;
 
-                    <button
-                      type="button"
-                      onClick={() => setAccountsStatusFilter('month')}
-                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
-                        accountsStatusFilter === 'month'
-                          ? 'bg-orange-600 text-white shadow-xs'
-                          : 'bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100'
-                      }`}
-                    >
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>This Month ({accountsStats.monthly.traineesCount})</span>
-                    </button>
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                          <button
+                            type="button"
+                            onClick={() => setAccountsStatusFilter('all')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                              accountsStatusFilter === 'all'
+                                ? 'bg-slate-900 text-white shadow-xs'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                            }`}
+                          >
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>{periodPillTitle}</span>
+                          </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setAccountsStatusFilter('due')}
-                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-2 ${
-                        accountsStatusFilter === 'due'
-                          ? 'bg-rose-600 text-white shadow-xs'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200/60 hover:bg-rose-100'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                      <span>Balance Due ({accountsStats.dueCount})</span>
-                    </button>
+                          <button
+                            type="button"
+                            onClick={() => setAccountsStatusFilter('due')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-2 ${
+                              accountsStatusFilter === 'due'
+                                ? 'bg-rose-600 text-white shadow-xs'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200/60 hover:bg-rose-100'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                            <span>Balance Due ({activeScopeData.dueCount})</span>
+                          </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setAccountsStatusFilter('settled')}
-                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-2 ${
-                        accountsStatusFilter === 'settled'
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 hover:bg-emerald-100'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      <span>Fully Settled ({accountsStats.settledCount})</span>
-                    </button>
-                  </div>
+                          <button
+                            type="button"
+                            onClick={() => setAccountsStatusFilter('settled')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-2 ${
+                              accountsStatusFilter === 'settled'
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 hover:bg-emerald-100'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                            <span>Fully Settled ({activeScopeData.settledCount})</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setAccountsStatusFilter('all_time')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                              accountsStatusFilter === 'all_time'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100'
+                            }`}
+                            title="View all trainees from all months"
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                            <span>All Months ({students.length})</span>
+                          </button>
+                        </div>
+
+                        {/* Month & Trainees Indicator Bar */}
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
+                          <span>
+                            Showing <strong className="text-slate-900 font-black">{accountsDisplayStudents.length}</strong> {accountsStatusFilter === 'all_time' ? 'All Months' : accountsPeriodScope === 'monthly' ? `${MONTH_NAMES[accountsSelectedMonth]} ${accountsSelectedYear}` : accountsPeriodScope === 'yearly' ? `${accountsSelectedYear}` : 'All-Time'} records
+                          </span>
+                          {accountsStatusFilter !== 'all' && (
+                            <span className="text-orange-600 font-black uppercase text-[11px] tracking-wider">
+                              Filter: {accountsStatusFilter === 'due' ? 'Balance Due' : accountsStatusFilter === 'settled' ? 'Fully Settled' : 'All Months'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Trainee Accounts Cards (Exact visual styling from Image 3) */}
                   <div className="space-y-4">
@@ -4853,6 +4893,7 @@ export default function App() {
             <div className="flex items-center justify-between p-6 sm:p-7 pb-4 border-b border-slate-100 shrink-0 bg-white">
               <div>
                 <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                  {modalConfig.mode === 'assign_slot' && 'Assign Trainee to Slot'}
                   {modalConfig.mode === 'add' && 'Add New Trainee'}
                   {modalConfig.mode === 'edit' && 'Edit Trainee Details'}
                   {modalConfig.mode === 'reschedule' && 'Reschedule Slot'}
@@ -4862,6 +4903,7 @@ export default function App() {
                   {modalConfig.mode === 'payment' && 'Record Fee Payment'}
                 </h3>
                 <p className="text-xs font-bold text-slate-500 mt-0.5">
+                  {modalConfig.mode === 'assign_slot' && `Select an existing registered trainee to schedule for ${modalConfig.data?.time}`}
                   {modalConfig.mode === 'add' && 'Register new student and assign initial time slot'}
                   {modalConfig.mode === 'edit' && `Update records for ${modalConfig.data?.name}`}
                   {modalConfig.mode === 'reschedule' && `Change training timing for ${modalConfig.data?.name}`}
@@ -4879,7 +4921,68 @@ export default function App() {
             {/* Modal Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-6 sm:p-7 pt-5 custom-scroll space-y-4">
               
-              {modalConfig.mode === 'delete' ? (
+              {modalConfig.mode === 'assign_slot' ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-orange-50/70 rounded-2xl border border-orange-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-orange-600 tracking-wider">Target Slot</span>
+                        <h4 className="text-base font-black text-slate-900">{modalConfig.data?.time}</h4>
+                      </div>
+                    </div>
+                    <span className="text-xs font-black text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-lg">Available</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-wider">
+                      Select Registered Trainee
+                    </label>
+                    <select
+                      id="assign_trainee_select"
+                      defaultValue=""
+                      className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 outline-none focus:border-orange-500 cursor-pointer"
+                    >
+                      <option value="" disabled>-- Select a trainee ({students.length} registered) --</option>
+                      {students.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.enrollmentNo || s.id} — {s.name} ({s.time ? `Slot: ${s.time}` : 'No Slot Assigned'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sel = document.getElementById('assign_trainee_select');
+                        const sId = sel ? sel.value : null;
+                        if (!sId) {
+                          showToast('Please select a trainee');
+                          return;
+                        }
+                        const targetStudent = students.find(s => s.id === sId);
+                        setStudents(prev => prev.map(s => s.id === sId ? { ...s, time: modalConfig.data?.time } : s));
+                        showToast(`Assigned ${targetStudent?.name} to ${modalConfig.data?.time} ✓`);
+                        closeModal();
+                      }}
+                      className="flex-1 py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-orange-600/20 active:scale-95"
+                    >
+                      Confirm Slot Assignment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openModal('add', { time: modalConfig.data?.time })}
+                      className="px-4 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                    >
+                      + New Trainee
+                    </button>
+                  </div>
+                </div>
+              ) : modalConfig.mode === 'delete' ? (
                 <div className="space-y-4 text-center py-4">
                   <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
                   <p className="text-sm font-bold text-slate-700">Are you sure you want to delete <span className="text-slate-900 font-black">{modalConfig.data?.name}</span>'s record?</p>
