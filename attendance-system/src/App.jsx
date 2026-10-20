@@ -365,8 +365,22 @@ const normalizeStudent = (s) => {
   }
   const pkgDetails = getPackageDetails(t);
   const days = pkgDetails?.days || 21;
-  const digits = String(s.enrollmentNo || s.id || '').replace(/\D/g, '');
-  const enrNo = digits ? String(parseInt(digits, 10)) : '1';
+  // Preserve and normalize Double Series 00/00
+  let enrNo = String(s.enrollmentNo || '').trim();
+  if (enrNo.includes('/')) {
+    const parts = enrNo.split('/');
+    const p1 = String(parseInt(parts[0], 10) || 1).padStart(2, '0');
+    const p2 = String(parseInt(parts[1], 10) || 1).padStart(2, '0');
+    enrNo = `${p1}/${p2}`;
+  } else if (!enrNo) {
+    const digits = String(s.id || '').replace(/\D/g, '');
+    enrNo = digits ? String(parseInt(digits, 10)).padStart(2, '0') + '/01' : '01/01';
+  } else {
+    const m = s.enrollmentDate ? parseInt(s.enrollmentDate.substring(5, 7), 10) || 1 : 1;
+    const p1 = String(parseInt(enrNo, 10) || 1).padStart(2, '0');
+    const p2 = String(m).padStart(2, '0');
+    enrNo = `${p1}/${p2}`;
+  }
   const username = s.username || `SMDS${enrNo}`;
   const password = s.password || `smds@${enrNo}`;
   const todayKey = getTodayKey();
@@ -505,7 +519,7 @@ export default function App() {
   // LocalStorage persistence for Trainees & Attendance
   const [students, setStudents] = useState(() => {
     try {
-      const saved = localStorage.getItem('smds_trainees_data_v7');
+      const saved = localStorage.getItem('smds_trainees_data_v8');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 50) {
@@ -533,7 +547,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('smds_trainees_data_v7', JSON.stringify(students));
+      localStorage.setItem('smds_trainees_data_v8', JSON.stringify(students));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -2411,13 +2425,13 @@ export default function App() {
                             <div className="flex items-center gap-4 min-w-0">
                               <div
                                 onClick={() => openModal('view', student)}
-                                className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
+                                className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
                                 title={`Enrollment No: ${student.enrollmentNo || student.id}`}
                               >
                                 <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
                                   NO.
                                 </span>
-                                <span className="text-lg sm:text-xl font-black text-[#E85D04] leading-none">
+                                <span className="text-sm sm:text-base font-black text-[#E85D04] leading-tight font-mono tracking-tight">
                                   {student.enrollmentNo || student.id}
                                 </span>
                               </div>
@@ -2658,18 +2672,18 @@ export default function App() {
                                 >
                                   {/* Trainee Identity */}
                                   <div className="flex items-center gap-3.5 min-w-0">
-                                    <div 
-                                      onClick={() => openModal('view', student)}
-                                      className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans"
-                                      title={`Enrollment No: ${student.enrollmentNo || student.id}`}
-                                    >
-                                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
-                                        NO.
-                                      </span>
-                                      <span className="text-lg sm:text-xl font-black text-[#E85D04] leading-none">
-                                        {student.enrollmentNo || student.id}
-                                      </span>
-                                    </div>
+                                      <div 
+                                        onClick={() => openModal('view', student)}
+                                        className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans"
+                                        title={`Enrollment No: ${student.enrollmentNo || student.id}`}
+                                      >
+                                        <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
+                                          NO.
+                                        </span>
+                                        <span className="text-sm sm:text-base font-black text-[#E85D04] leading-tight font-mono tracking-tight">
+                                          {student.enrollmentNo || student.id}
+                                        </span>
+                                      </div>
                                     <div className="min-w-0">
                                       <h4 
                                         onClick={() => openModal('view', student)}
@@ -3054,11 +3068,11 @@ export default function App() {
                             >
                               {/* Left: Identity */}
                               <div className="flex items-center gap-3.5 min-w-0">
-                                <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] text-[#E85D04] flex flex-col items-center justify-center shrink-0 shadow-2xs font-sans">
+                                <div className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] text-[#E85D04] flex flex-col items-center justify-center shrink-0 shadow-2xs font-sans">
                                   <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
                                     NO.
                                   </span>
-                                  <span className="text-lg sm:text-xl font-black text-[#E85D04] leading-none">
+                                  <span className="text-sm sm:text-base font-black text-[#E85D04] leading-tight font-mono tracking-tight">
                                     {student.enrollmentNo || student.id}
                                   </span>
                                 </div>
@@ -3718,13 +3732,13 @@ export default function App() {
                             <div className="flex items-center gap-4 min-w-0">
                               <div
                                 onClick={() => openModal('view', student)}
-                                className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
+                                className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
                                 title={`Enrollment No: ${student.enrollmentNo || student.id}`}
                               >
                                 <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
                                   NO.
                                 </span>
-                                <span className="text-lg sm:text-xl font-black text-[#E85D04] leading-none">
+                                <span className="text-sm sm:text-base font-black text-[#E85D04] leading-tight font-mono tracking-tight">
                                   {student.enrollmentNo || student.id}
                                 </span>
                               </div>
