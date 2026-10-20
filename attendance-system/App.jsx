@@ -499,7 +499,7 @@ export default function App() {
   // LocalStorage persistence for Trainees & Attendance
   const [students, setStudents] = useState(() => {
     try {
-      const saved = localStorage.getItem('smds_trainees_data_v9');
+      const saved = localStorage.getItem('smds_trainees_data_v10');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 50) {
@@ -527,7 +527,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('smds_trainees_data_v9', JSON.stringify(students));
+      localStorage.setItem('smds_trainees_data_v10', JSON.stringify(students));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -618,7 +618,7 @@ export default function App() {
 
   const attendanceHistory = useMemo(() => {
     try {
-      return JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
+      return JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
     } catch {
       return {};
     }
@@ -960,7 +960,7 @@ export default function App() {
       setLoggedInTrainee(updatedStudent);
     }
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
       if (!history[todayKey]) history[todayKey] = [];
       const idx = history[todayKey].findIndex(h => h.id === updatedStudent.id);
       if (targetStatus === 'pending') {
@@ -970,7 +970,7 @@ export default function App() {
         if (idx >= 0) history[todayKey][idx] = item;
         else history[todayKey].push(item);
       }
-      localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1042,20 +1042,25 @@ export default function App() {
     };
   };
 
-  // KPI Statistics for the selected Attendance Date
+  // Only trainees who have an assigned slot (active schedule) appear in Daily Attendance Master
+  const scheduledAttendanceStudents = useMemo(() => {
+    return students.filter(s => Boolean(s.time));
+  }, [students]);
+
+  // KPI Statistics for the selected Attendance Date (calculated for scheduled trainees only)
   const attendanceDateStats = useMemo(() => {
     let presentCount = 0;
     let absentCount = 0;
     let pendingCount = 0;
 
-    students.forEach(s => {
+    scheduledAttendanceStudents.forEach(s => {
       const rec = getTraineeAttendanceForDate(s, attendanceDateKey);
       if (rec.status === 'present') presentCount++;
       else if (rec.status === 'absent') absentCount++;
       else pendingCount++;
     });
 
-    const total = students.length;
+    const total = scheduledAttendanceStudents.length;
     const turnoutRate = total > 0 ? Math.round((presentCount / total) * 100) : 0;
     const absenteeRate = total > 0 ? Math.round((absentCount / total) * 100) : 0;
 
@@ -1067,11 +1072,11 @@ export default function App() {
       turnoutRate,
       absenteeRate
     };
-  }, [students, attendanceDateKey, attendanceHistory, todayKey]);
+  }, [scheduledAttendanceStudents, attendanceDateKey, attendanceHistory, todayKey]);
 
-  // Filtered Students list for Attendance Sheet
+  // Filtered Students list for Attendance Sheet (only scheduled trainees)
   const filteredAttendanceStudents = useMemo(() => {
-    return students.filter(student => {
+    return scheduledAttendanceStudents.filter(student => {
       const q = attendanceSearchTerm.toLowerCase().trim();
       const uName = (student.username || getTraineeUsername(student.enrollmentNo)).toLowerCase();
       const pkg = getPackageDetails(student.type);
@@ -1089,12 +1094,12 @@ export default function App() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [students, attendanceSearchTerm, attendanceStatusFilter, attendanceDateKey, attendanceHistory, todayKey]);
+  }, [scheduledAttendanceStudents, attendanceSearchTerm, attendanceStatusFilter, attendanceDateKey, attendanceHistory, todayKey]);
 
   // Chronological Daily Attendance Logs for the selected date
   const attendanceDateLogs = useMemo(() => {
     const list = [];
-    students.forEach(s => {
+    scheduledAttendanceStudents.forEach(s => {
       const rec = getTraineeAttendanceForDate(s, attendanceDateKey);
       if (rec.isRecorded && rec.status !== 'pending') {
         const validTime = (rec.time && rec.time !== 'Absent' && rec.time !== 'Missed Session')
@@ -1113,7 +1118,7 @@ export default function App() {
       }
     });
     return list;
-  }, [students, attendanceDateKey, attendanceHistory, todayKey]);
+  }, [scheduledAttendanceStudents, attendanceDateKey, attendanceHistory, todayKey]);
 
   // Mark Attendance for a trainee on the selected date
   const handleMarkAttendanceForDate = (studentId, targetStatus, customTime = null) => {
@@ -1199,7 +1204,7 @@ export default function App() {
     });
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
       if (!history[targetKey]) history[targetKey] = [];
       const idx = history[targetKey].findIndex(h => h.id === studentId);
       if (targetStatus === 'pending') {
@@ -1210,7 +1215,7 @@ export default function App() {
         if (idx >= 0) history[targetKey][idx] = item;
         else history[targetKey].push(item);
       }
-      localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1219,12 +1224,16 @@ export default function App() {
     showToast(`${stName}: ${targetStatus === 'present' ? 'Marked Present ✓' : targetStatus === 'absent' ? 'Marked Absent ✕' : 'Attendance Cleared'}`);
   };
 
-  // Bulk mark all trainees as present or absent for attendanceDateKey
+  // Bulk mark all scheduled trainees as present or absent for attendanceDateKey
   const handleBulkMarkAttendance = (targetStatus) => {
-    students.forEach(s => {
+    if (scheduledAttendanceStudents.length === 0) {
+      showToast('No trainees currently scheduled to mark attendance');
+      return;
+    }
+    scheduledAttendanceStudents.forEach(s => {
       handleMarkAttendanceForDate(s.id, targetStatus);
     });
-    showToast(`All trainees marked as ${targetStatus.toUpperCase()} for ${attendanceDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}!`);
+    showToast(`Marked ${scheduledAttendanceStudents.length} scheduled trainees as ${targetStatus.toUpperCase()}!`);
   };
 
   // Per-date count calculation for calendar cells (Present vs Absent)
@@ -1238,14 +1247,14 @@ export default function App() {
     let absent = 0;
     let pending = 0;
 
-    students.forEach(s => {
+    scheduledAttendanceStudents.forEach(s => {
       const rec = getTraineeAttendanceForDate(s, dKey);
       if (rec.status === 'present') present++;
       else if (rec.status === 'absent') absent++;
       else pending++;
     });
 
-    return { present, absent, pending, total: students.length };
+    return { present, absent, pending, total: scheduledAttendanceStudents.length };
   };
 
   const showToast = (message, type = 'success') => {
@@ -1435,7 +1444,7 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updatedTrainee.id ? updatedTrainee : s));
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
       if (!history[todayKey]) history[todayKey] = [];
       const idx = history[todayKey].findIndex(h => h.id === updatedTrainee.id);
       if (idx >= 0) {
@@ -1443,7 +1452,7 @@ export default function App() {
       } else {
         history[todayKey].push({ id: updatedTrainee.id, status: 'present', time: updatedTrainee.time, checkInTime: timeStr });
       }
-      localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
+      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
     } catch (e) {
       console.error(e);
     }
@@ -1474,10 +1483,10 @@ export default function App() {
     setStudents(prev => prev.map(s => s.id === updatedTrainee.id ? updatedTrainee : s));
 
     try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
       if (history[todayKey]) {
         history[todayKey] = history[todayKey].filter(h => h.id !== updatedTrainee.id);
-        localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
+        localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
       }
     } catch (e) {
       console.error(e);
@@ -1508,10 +1517,10 @@ export default function App() {
       setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
       if (loggedInTrainee && loggedInTrainee.id === updated.id) setLoggedInTrainee(updated);
       try {
-        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
+        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
         if (history[todayKey]) {
           history[todayKey] = history[todayKey].filter(h => h.id !== updated.id);
-          localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
+          localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
         }
       } catch (e) {
         console.error(e);
@@ -1540,12 +1549,12 @@ export default function App() {
       setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
       if (loggedInTrainee && loggedInTrainee.id === updated.id) setLoggedInTrainee(updated);
       try {
-        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v9') || '{}');
+        const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
         if (!history[todayKey]) history[todayKey] = [];
         const idx = history[todayKey].findIndex(h => h.id === updated.id);
         if (idx >= 0) history[todayKey][idx] = { id: updated.id, status: 'present', time: updated.time, checkInTime: timeStr };
         else history[todayKey].push({ id: updated.id, status: 'present', time: updated.time, checkInTime: timeStr });
-        localStorage.setItem('smds_attendance_history_v9', JSON.stringify(history));
+        localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
       } catch (e) {
         console.error(e);
       }
@@ -2973,13 +2982,23 @@ export default function App() {
                       )}
                     </div>
 
-                    {/* Quick Bulk Action Buttons */}
+                    {/* Quick Action Buttons (Assign Trainee + Bulk Mark) */}
                     <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                      <button
+                        type="button"
+                        onClick={() => openModal('assign_slot')}
+                        className="px-4 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
+                        title="Assign a trainee to schedule for attendance"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>Assign Trainee</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => handleBulkMarkAttendance('present')}
                         className="px-4 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
-                        title="Mark all trainees as present for this date"
+                        title="Mark all scheduled trainees as present for this date"
                       >
                         <Check className="w-4 h-4 stroke-[2.5]" />
                         <span>Mark All Present</span>
@@ -2989,7 +3008,7 @@ export default function App() {
                         type="button"
                         onClick={() => handleBulkMarkAttendance('absent')}
                         className="px-4 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
-                        title="Mark all trainees as absent for this date"
+                        title="Mark all scheduled trainees as absent for this date"
                       >
                         <X className="w-4 h-4 stroke-[2.5]" />
                         <span>Mark All Absent</span>
@@ -3008,7 +3027,7 @@ export default function App() {
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      All Trainees ({students.length})
+                      All Scheduled ({scheduledAttendanceStudents.length})
                     </button>
 
                     <button
@@ -3101,7 +3120,7 @@ export default function App() {
                                   <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-bold flex-wrap">
                                     <span className="flex items-center gap-1">
                                       <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                      <span>Slot: {student.time || '06:00 AM'}</span>
+                                      <span>Slot: {student.time || 'Unscheduled'}</span>
                                     </span>
                                     {student.phone && (
                                       <>
@@ -3180,24 +3199,45 @@ export default function App() {
                                 >
                                   <RotateCcw className="w-3.5 h-3.5" />
                                 </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFromSlot(student.id)}
+                                  className="p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-transparent hover:border-rose-200 transition-colors cursor-pointer shadow-2xs"
+                                  title="Remove from Attendance (clear slot)"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
                           );
                         })
                       ) : (
-                        <div className="py-16 text-center text-slate-400 font-bold flex flex-col items-center justify-center gap-2">
-                          <CheckCircle2 className="w-12 h-12 text-slate-300" />
-                          <p className="text-base font-black text-slate-700">No trainees found</p>
-                          <p className="text-xs text-slate-400">Try adjusting your search query or status filter</p>
-                          {attendanceStatusFilter !== 'all' && (
+                        <div className="py-16 text-center text-slate-400 font-bold flex flex-col items-center justify-center gap-3 bg-white rounded-3xl border border-slate-100 p-8 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.02)]">
+                          <div className="w-16 h-16 rounded-3xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100 shadow-2xs">
+                            <UserCheck className="w-8 h-8 stroke-[2.2]" />
+                          </div>
+                          <p className="text-lg font-black text-slate-900">No Trainees in Attendance Master</p>
+                          <p className="text-xs text-slate-500 max-w-md font-medium">
+                            Daily attendance is only recorded for trainees who have an active driving slot. All 363 registered trainees are safely preserved in Accounts Master & Trainee Directory.
+                          </p>
+                          <div className="flex items-center gap-3 pt-2">
                             <button
                               type="button"
-                              onClick={() => setAttendanceStatusFilter('all')}
-                              className="mt-2 text-xs font-black uppercase tracking-wider text-orange-600 hover:underline cursor-pointer"
+                              onClick={() => openModal('assign_slot')}
+                              className="px-5 py-3 rounded-2xl bg-[#E85D04] hover:bg-[#d45302] text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-2"
                             >
-                              Reset to All Trainees
+                              <Plus className="w-4 h-4" />
+                              <span>Assign Trainee to Attendance</span>
                             </button>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => setAdminSubTab('schedule')}
+                              className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                            >
+                              Go to Schedule Master
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -4954,19 +4994,38 @@ export default function App() {
                     </select>
                   </div>
 
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-wider">
+                      Select Training Time Slot
+                    </label>
+                    <select
+                      id="assign_slot_select"
+                      defaultValue={modalConfig.data?.time || '06:00 AM'}
+                      className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 outline-none focus:border-orange-500 cursor-pointer"
+                    >
+                      {TIME_SLOTS.map(t => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="flex items-center gap-3 pt-3">
                     <button
                       type="button"
                       onClick={() => {
                         const sel = document.getElementById('assign_trainee_select');
+                        const selSlot = document.getElementById('assign_slot_select');
                         const sId = sel ? sel.value : null;
+                        const assignedSlot = (selSlot ? selSlot.value : null) || modalConfig.data?.time || '06:00 AM';
                         if (!sId) {
                           showToast('Please select a trainee');
                           return;
                         }
                         const targetStudent = students.find(s => s.id === sId);
-                        setStudents(prev => prev.map(s => s.id === sId ? { ...s, time: modalConfig.data?.time } : s));
-                        showToast(`Assigned ${targetStudent?.name} to ${modalConfig.data?.time} ✓`);
+                        setStudents(prev => prev.map(s => s.id === sId ? { ...s, time: assignedSlot } : s));
+                        showToast(`Assigned ${targetStudent?.name} to ${assignedSlot} ✓`);
                         closeModal();
                       }}
                       className="flex-1 py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-orange-600/20 active:scale-95"
