@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -347,6 +347,110 @@ const DAY_HEADERS = [
   { short: 'Sat', full: 'Saturday' }
 ];
 const YEARS_LIST = Array.from({ length: 151 }, (_, i) => 1950 + i); // 1950 to 2100 (All Available Years)
+
+// CUSTOM ELEGANT SELECT DROPDOWN COMPONENT (Replaces ugly native browser selects across all calendars)
+const CustomSelectDropdown = ({
+  value,
+  onChange,
+  options,
+  align = 'left',
+  minWidth = 'min-w-[130px]',
+  className = '',
+  buttonClassName = '',
+  menuClassName = '',
+  isMono = false,
+  title = '',
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+  const activeItemRef = useRef(null);
+
+  // Close when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  // Scroll active item into view smoothly when dropdown opens
+  useEffect(() => {
+    if (isOpen && activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    }
+  }, [isOpen]);
+
+  const normalizedOptions = useMemo(() => {
+    return options.map(opt => {
+      if (typeof opt === 'object' && opt !== null) {
+        return { value: opt.value, label: opt.label || String(opt.value) };
+      }
+      return { value: opt, label: String(opt) };
+    });
+  }, [options]);
+
+  const currentOpt = normalizedOptions.find(o => String(o.value) === String(value)) || normalizedOptions[0];
+
+  return (
+    <div ref={containerRef} className={`relative inline-block text-left ${className}`} title={title}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(prev => !prev)}
+        className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200/90 hover:border-orange-500 text-xs sm:text-sm font-black text-slate-800 flex items-center justify-between gap-1.5 transition-all cursor-pointer shadow-2xs group focus:outline-none focus:ring-2 focus:ring-orange-400/20 active:scale-98 ${buttonClassName}`}
+      >
+        <span className={`truncate ${isMono ? 'font-mono' : ''}`}>
+          {currentOpt ? currentOpt.label : value}
+        </span>
+        <ChevronDown 
+          className={`w-3.5 h-3.5 text-slate-400 group-hover:text-orange-500 transition-transform duration-200 shrink-0 ${
+            isOpen ? 'rotate-180 text-orange-500' : ''
+          }`} 
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute top-full mt-1.5 z-[70] ${align === 'right' ? 'right-0' : 'left-0'} ${minWidth} max-h-56 overflow-y-auto overscroll-contain bg-white/98 backdrop-blur-md rounded-2xl shadow-xl border border-slate-100 p-1.5 custom-scroll animate-in fade-in zoom-in-95 duration-150 ${menuClassName}`}
+        >
+          {normalizedOptions.map(opt => {
+            const isSelected = String(opt.value) === String(value);
+            return (
+              <button
+                key={opt.value}
+                ref={isSelected ? activeItemRef : null}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-3 py-1.5 sm:py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer text-left mb-0.5 last:mb-0 ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black shadow-xs'
+                    : 'text-slate-700 font-bold hover:bg-orange-50 hover:text-orange-600'
+                }`}
+              >
+                <span className={`truncate ${isMono ? 'font-mono' : ''}`}>{opt.label}</span>
+                {isSelected && <Check className="w-3.5 h-3.5 shrink-0 ml-1.5 stroke-[2.5]" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 const normalizeStudent = (s) => {
   let t = s.type;
@@ -3474,27 +3578,26 @@ export default function App() {
 
                       {/* Month Dropdown (Used in Monthly View) */}
                       {accountsPeriodScope === 'monthly' && (
-                        <select
+                        <CustomSelectDropdown
                           value={accountsSelectedMonth}
-                          onChange={(e) => setAccountsSelectedMonth(Number(e.target.value))}
-                          className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm font-black text-slate-800 outline-none focus:border-orange-500 cursor-pointer shadow-2xs"
-                        >
-                          {MONTH_NAMES.map((m, idx) => (
-                            <option key={m} value={idx}>{m}</option>
-                          ))}
-                        </select>
+                          onChange={(val) => setAccountsSelectedMonth(Number(val))}
+                          options={MONTH_NAMES.map((m, idx) => ({ value: idx, label: m }))}
+                          align="left"
+                          minWidth="w-36"
+                          title="Select Accounts Month"
+                        />
                       )}
 
                       {/* Year Dropdown */}
-                      <select
+                      <CustomSelectDropdown
                         value={accountsSelectedYear}
-                        onChange={(e) => setAccountsSelectedYear(Number(e.target.value))}
-                        className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm font-black text-slate-800 outline-none focus:border-orange-500 cursor-pointer shadow-2xs font-mono"
-                      >
-                        {YEARS_LIST.map(y => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
+                        onChange={(val) => setAccountsSelectedYear(Number(val))}
+                        options={YEARS_LIST.map(y => ({ value: y, label: String(y) }))}
+                        align="left"
+                        minWidth="w-28"
+                        isMono={true}
+                        title="Select Accounts Year"
+                      />
 
                       {/* Next Period Arrow */}
                       <button
@@ -4592,26 +4695,25 @@ export default function App() {
                 <ChevronLeft className="w-4 h-4" />
               </button>
               
-              <div className="flex items-center gap-1.5">
-                <select 
+              <div className="flex items-center justify-center gap-2 flex-1 mx-2">
+                <CustomSelectDropdown
                   value={calViewDate.getMonth()}
-                  onChange={(e) => setCalViewDate(new Date(calViewDate.getFullYear(), Number(e.target.value), 1))}
-                  className="bg-white px-3 py-1.5 rounded-xl text-xs font-black text-slate-800 border border-slate-200 outline-none cursor-pointer hover:border-orange-500 shadow-2xs"
-                >
-                  {MONTH_NAMES.map((m, idx) => (
-                    <option key={m} value={idx}>{m}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setCalViewDate(new Date(calViewDate.getFullYear(), Number(val), 1))}
+                  options={MONTH_NAMES.map((m, idx) => ({ value: idx, label: m }))}
+                  align="left"
+                  minWidth="w-36"
+                  title="Select Calendar Month"
+                />
 
-                <select 
+                <CustomSelectDropdown
                   value={calViewDate.getFullYear()}
-                  onChange={(e) => setCalViewDate(new Date(Number(e.target.value), calViewDate.getMonth(), 1))}
-                  className="bg-white px-3 py-1.5 rounded-xl text-xs font-black text-slate-800 border border-slate-200 outline-none cursor-pointer hover:border-orange-500 shadow-2xs font-mono"
-                >
-                  {YEARS_LIST.map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setCalViewDate(new Date(Number(val), calViewDate.getMonth(), 1))}
+                  options={YEARS_LIST.map(y => ({ value: y, label: String(y) }))}
+                  align="right"
+                  minWidth="w-28"
+                  isMono={true}
+                  title="Select Calendar Year"
+                />
               </div>
 
               <button 
