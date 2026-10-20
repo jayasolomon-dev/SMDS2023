@@ -2425,7 +2425,7 @@ export default function App() {
                             <div className="flex items-center gap-4 min-w-0">
                               <div
                                 onClick={() => openModal('view', student)}
-                                className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
+                                className="min-w-15.5 sm:min-w-17.5 px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
                                 title={`Enrollment No: ${student.enrollmentNo || student.id}`}
                               >
                                 <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
@@ -2674,7 +2674,7 @@ export default function App() {
                                   <div className="flex items-center gap-3.5 min-w-0">
                                       <div 
                                         onClick={() => openModal('view', student)}
-                                        className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans"
+                                        className="min-w-15.5 sm:min-w-17.5 px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans"
                                         title={`Enrollment No: ${student.enrollmentNo || student.id}`}
                                       >
                                         <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
@@ -3068,7 +3068,7 @@ export default function App() {
                             >
                               {/* Left: Identity */}
                               <div className="flex items-center gap-3.5 min-w-0">
-                                <div className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] text-[#E85D04] flex flex-col items-center justify-center shrink-0 shadow-2xs font-sans">
+                                <div className="min-w-15.5 sm:min-w-17.5 px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] text-[#E85D04] flex flex-col items-center justify-center shrink-0 shadow-2xs font-sans">
                                   <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
                                     NO.
                                   </span>
@@ -3732,7 +3732,7 @@ export default function App() {
                             <div className="flex items-center gap-4 min-w-0">
                               <div
                                 onClick={() => openModal('view', student)}
-                                className="min-w-[62px] sm:min-w-[70px] px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
+                                className="min-w-15.5 sm:min-w-17.5 px-2 py-1 h-12 sm:h-13 rounded-2xl bg-[#FFF6EF] border border-[#FED7AA] hover:border-orange-400 hover:bg-[#FFEEDB] text-[#E85D04] flex flex-col items-center justify-center shrink-0 cursor-pointer shadow-2xs transition-all font-sans group"
                                 title={`Enrollment No: ${student.enrollmentNo || student.id}`}
                               >
                                 <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#E85D04] leading-none mb-0.5">
