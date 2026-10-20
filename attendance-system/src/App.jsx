@@ -921,12 +921,12 @@ export default function App() {
         completedAt: isCourseCompleted ? todayKey : student.completedAt,
         lastCheckInDate: todayKey,
         lastCheckInTime: timeStr,
-        attendanceLog: [newEntry, ...filteredLog],
+        attendanceLog: isCourseCompleted ? [] : [newEntry, ...filteredLog],
         stats: { ...student.stats, attended: newAttended }
       };
 
       if (isCourseCompleted) {
-        showToast(`🎉 ${student.name} completed all ${totalCourseDays} days attendance! Course closed & slot freed.`);
+        showToast(`🎉 ${student.name} completed all ${totalCourseDays} days training! Course closed & all records cleared from attendance register.`);
       } else {
         showToast(`Marked ${student.name} as Present ✓`);
       }
@@ -972,14 +972,24 @@ export default function App() {
     }
     try {
       const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
-      if (!history[todayKey]) history[todayKey] = [];
-      const idx = history[todayKey].findIndex(h => h.id === updatedStudent.id);
-      if (targetStatus === 'pending') {
-        if (idx >= 0) history[todayKey].splice(idx, 1);
+      if (updatedStudent.courseCompleted) {
+        // Completely purge student from all dates in attendance register history
+        Object.keys(history).forEach(d => {
+          if (Array.isArray(history[d])) {
+            history[d] = history[d].filter(h => h.id !== updatedStudent.id);
+            if (history[d].length === 0) delete history[d];
+          }
+        });
       } else {
-        const item = { id: updatedStudent.id, status: targetStatus, time: updatedStudent.time, checkInTime: updatedStudent.lastCheckInTime };
-        if (idx >= 0) history[todayKey][idx] = item;
-        else history[todayKey].push(item);
+        if (!history[todayKey]) history[todayKey] = [];
+        const idx = history[todayKey].findIndex(h => h.id === updatedStudent.id);
+        if (targetStatus === 'pending') {
+          if (idx >= 0) history[todayKey].splice(idx, 1);
+        } else {
+          const item = { id: updatedStudent.id, status: targetStatus, time: updatedStudent.time, checkInTime: updatedStudent.lastCheckInTime };
+          if (idx >= 0) history[todayKey][idx] = item;
+          else history[todayKey].push(item);
+        }
       }
       localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
     } catch (e) {
@@ -1204,13 +1214,13 @@ export default function App() {
         const updated = {
           ...student,
           status: isCourseCompleted ? 'completed' : newStatus,
-          // When 21 days attendance completes, automatically remove slot from schedule & attendance sheet!
+          // When 21 days attendance completes, automatically remove slot from schedule & clear from attendance register!
           time: isCourseCompleted ? null : student.time,
           courseCompleted: isCourseCompleted,
           completedAt: isCourseCompleted ? targetKey : (targetStatus === 'pending' ? null : student.completedAt),
           lastCheckInDate: lastDate,
           lastCheckInTime: lastTime,
-          attendanceLog: newLog,
+          attendanceLog: isCourseCompleted ? [] : newLog,
           stats: {
             ...student.stats,
             attended: attendedDays,
@@ -1226,31 +1236,41 @@ export default function App() {
       });
     });
 
-    try {
-      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
-      if (!history[targetKey]) history[targetKey] = [];
-      const idx = history[targetKey].findIndex(h => h.id === studentId);
-      if (targetStatus === 'pending') {
-        if (idx >= 0) history[targetKey].splice(idx, 1);
-      } else {
-        const stTime = students.find(s => s.id === studentId)?.time || '06:00 AM';
-        const item = { id: studentId, status: targetStatus, time: stTime, checkInTime: timeStr };
-        if (idx >= 0) history[targetKey][idx] = item;
-        else history[targetKey].push(item);
-      }
-      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
-    } catch (e) {
-      console.error(e);
-    }
-
     const stStudent = students.find(s => s.id === studentId);
     const stName = stStudent?.name || 'Trainee';
     const totalDays = Number(stStudent?.stats?.total || 21);
     const existingPresent = (Array.isArray(stStudent?.attendanceLog) ? stStudent.attendanceLog : []).filter(l => l.date !== targetKey && l.status === 'present').length;
     const willComplete = targetStatus === 'present' && (existingPresent + 1) >= totalDays;
 
+    try {
+      const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
+      if (willComplete) {
+        // Class complete: completely purge trainee from attendance history / register across all dates!
+        Object.keys(history).forEach(d => {
+          if (Array.isArray(history[d])) {
+            history[d] = history[d].filter(h => h.id !== studentId);
+            if (history[d].length === 0) delete history[d];
+          }
+        });
+      } else {
+        if (!history[targetKey]) history[targetKey] = [];
+        const idx = history[targetKey].findIndex(h => h.id === studentId);
+        if (targetStatus === 'pending') {
+          if (idx >= 0) history[targetKey].splice(idx, 1);
+        } else {
+          const stTime = students.find(s => s.id === studentId)?.time || '06:00 AM';
+          const item = { id: studentId, status: targetStatus, time: stTime, checkInTime: timeStr };
+          if (idx >= 0) history[targetKey][idx] = item;
+          else history[targetKey].push(item);
+        }
+      }
+      localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
+    } catch (e) {
+      console.error(e);
+    }
+
     if (willComplete) {
-      showToast(`🎉 ${stName} has completed all ${totalDays} days attendance! Course closed and automatically removed from attendance sheet.`);
+      showToast(`🎉 ${stName} completed all ${totalDays} days attendance! Course closed and data removed from attendance register.`);
     } else {
       showToast(`${stName}: ${targetStatus === 'present' ? 'Marked Present ✓' : targetStatus === 'absent' ? 'Marked Absent ✕' : 'Attendance Cleared'}`);
     }
@@ -1466,7 +1486,7 @@ export default function App() {
       completedAt: isCompleted ? todayKey : loggedInTrainee.completedAt,
       lastCheckInDate: todayKey,
       lastCheckInTime: timeStr,
-      attendanceLog: updatedLog,
+      attendanceLog: isCompleted ? [] : updatedLog,
       stats: {
         ...loggedInTrainee.stats,
         attended: newAttended,
@@ -1479,12 +1499,21 @@ export default function App() {
 
     try {
       const history = JSON.parse(localStorage.getItem('smds_attendance_history_v10') || '{}');
-      if (!history[todayKey]) history[todayKey] = [];
-      const idx = history[todayKey].findIndex(h => h.id === updatedTrainee.id);
-      if (idx >= 0) {
-        history[todayKey][idx] = { id: updatedTrainee.id, status: 'present', time: updatedTrainee.time, checkInTime: timeStr };
+      if (isCompleted) {
+        Object.keys(history).forEach(d => {
+          if (Array.isArray(history[d])) {
+            history[d] = history[d].filter(h => h.id !== updatedTrainee.id);
+            if (history[d].length === 0) delete history[d];
+          }
+        });
       } else {
-        history[todayKey].push({ id: updatedTrainee.id, status: 'present', time: updatedTrainee.time, checkInTime: timeStr });
+        if (!history[todayKey]) history[todayKey] = [];
+        const idx = history[todayKey].findIndex(h => h.id === updatedTrainee.id);
+        if (idx >= 0) {
+          history[todayKey][idx] = { id: updatedTrainee.id, status: 'present', time: updatedTrainee.time, checkInTime: timeStr };
+        } else {
+          history[todayKey].push({ id: updatedTrainee.id, status: 'present', time: updatedTrainee.time, checkInTime: timeStr });
+        }
       }
       localStorage.setItem('smds_attendance_history_v10', JSON.stringify(history));
     } catch (e) {
@@ -2822,9 +2851,10 @@ export default function App() {
                             ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
+                        title="View Daily Attendance Register"
                       >
                         <FileText className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Daily Logs ({attendanceDateLogs.length})</span>
+                        <span>Daily Register ({attendanceDateLogs.length})</span>
                       </button>
                     </div>
 
@@ -3283,7 +3313,7 @@ export default function App() {
                           <FileText className="w-5 h-5 text-orange-600" />
                           <div>
                             <h4 className="text-sm font-black text-slate-900 leading-tight">
-                              Daily Attendance Audit Log
+                              Daily Attendance Register & Audit Log
                             </h4>
                             <span className="text-[11px] font-bold text-slate-500">
                               {attendanceDate.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
