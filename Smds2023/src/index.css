@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --breakpoint-xs: 25rem; /* 400px */
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+@keyframes leafletPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Rapido Modern Ride-Navigation Map Theme */
+.rapido-map-container {
+  background-color: #F4F3F0;
+}
+
+.rapido-map-container img.leaflet-tile {
+  filter: contrast(105%) saturate(115%) brightness(101%);
+}
+
+@keyframes rapidoPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes rapidoDash {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.rapido-route-glow {
+  animation: rapidoDash 1.4s linear infinite;
+  filter: drop-shadow(0 2px 4px rgba(245, 158, 11, 0.45));
+}
+
+/* Hide Google branding, watermarks, terms, and report error links */
+.gm-style-cc {
+  display: none !important;
+}
+.gm-style a[href*="maps.google.com"] {
+  display: none !important;
+}
+.gmnoprint {
+  display: none !important;
+}

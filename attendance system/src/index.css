@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --breakpoint-xs: 25rem; /* 400px */
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt-modal,
+  #printable-receipt-modal * {
+    visibility: visible;
+  }
+  #printable-receipt-modal {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 1.5rem !important;
+  }
+}
