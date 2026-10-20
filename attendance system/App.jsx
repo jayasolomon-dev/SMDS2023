@@ -52,6 +52,7 @@ import {
   BadgeCheck,
   RotateCcw
 } from 'lucide-react';
+import { INITIAL_STUDENTS } from './initialStudents.js';
 
 const getTraineeUsername = (enrollmentNo) => {
   const num = String(enrollmentNo || '').replace(/\D/g, '') || '1';
@@ -115,101 +116,22 @@ const DrivingSchoolLogo = ({ className = "w-11 h-11 sm:w-12 sm:h-12" }) => (
   </div>
 );
 
-// 6 DISTINCT DRIVING SCHOOL PACKAGES (FROM ATTACHED IMAGE 2)
+// 7 DRIVING SCHOOL CLASS TYPES & PACKAGES (ACCORDING TO SMDS ACCOUNTS RULES)
 export const DRIVING_PACKAGES = {
-  item_8: {
-    id: 'item_8',
-    itemNo: 'ITEM #8',
-    duration: '21 DAYS',
-    category: 'PACKAGE',
-    badge: 'BEST VALUE • MOST POPULAR',
-    badgeBg: 'bg-amber-500 text-white',
-    title: 'Four Wheeler Training with 2 & 4 Wheeler Licence',
-    short: '21D + Licence',
-    full: 'Four Wheeler Training with 2 & 4 Wheeler Licence',
-    subtitle: 'Individual 1-on-1 Training • Flexible Installments • 2 Pre-RTO Test Trials Included',
-    features: 'Individual 1-on-1 Training • Flexible Installments • 2 Pre-RTO Test Trials Included',
-    defaultFee: 8000,
-    days: 21,
-    tag: 'Govt. Approved',
-    badgePillBg: 'bg-emerald-50',
-    badgePillText: 'text-emerald-700',
-    badgePillBorder: 'border-emerald-200',
-    dotColor: 'bg-emerald-500'
-  },
-  item_12: {
-    id: 'item_12',
-    itemNo: 'ITEM #12',
-    duration: '21 DAYS',
-    category: 'TRAINING',
-    badge: 'SKILL MASTERY',
-    badgeBg: 'bg-orange-500 text-white',
-    title: 'Four Wheeler Training Only - 21 Days',
-    short: '21D Training',
-    full: 'Four Wheeler Training Only - 21 Days',
-    subtitle: 'Full 21 Days 40-Min Daily On-Road & Highway Practice • Flexible Payment Options',
-    features: 'Full 21 Days 40-Min Daily On-Road & Highway Practice • Flexible Payment Options',
-    defaultFee: 8000,
-    days: 21,
-    tag: 'Govt. Approved',
-    badgePillBg: 'bg-blue-50',
-    badgePillText: 'text-blue-700',
-    badgePillBorder: 'border-blue-200',
-    dotColor: 'bg-blue-500'
-  },
-  item_13: {
-    id: 'item_13',
-    itemNo: 'ITEM #13',
-    duration: '10 DAYS',
-    category: 'TRAINING',
-    badge: 'FAST TRACK REFRESHER',
-    badgeBg: 'bg-amber-600 text-white',
-    title: 'Four Wheeler Training Only - 10 Days',
-    short: '10D Training',
-    full: 'Four Wheeler Training Only (Individual - 10 Days)',
-    subtitle: 'KMCH, Sulur Pirivu & Traffic Practice for Existing License Holders',
-    features: 'KMCH, Sulur Pirivu & Traffic Practice for Existing License Holders',
-    defaultFee: 6000,
-    days: 10,
-    tag: 'Govt. Approved',
-    badgePillBg: 'bg-amber-50',
-    badgePillText: 'text-amber-700',
-    badgePillBorder: 'border-amber-200',
-    dotColor: 'bg-amber-500'
-  },
-  item_3: {
-    id: 'item_3',
-    itemNo: 'ITEM #3',
-    duration: 'RTO PROCESS',
-    category: 'LICENCE',
-    badge: 'COMBO DL',
-    badgeBg: 'bg-orange-500 text-white',
-    title: 'Two Wheeler & Four Wheeler Licence Only',
-    short: 'Combo Licence Only',
-    full: 'Two Wheeler & Four Wheeler Licence Only',
-    subtitle: 'LLR, Slot Booking, Document Scrutiny & RTO Test Representation',
-    features: 'LLR, Slot Booking, Document Scrutiny & RTO Test Representation',
-    defaultFee: 5500,
-    days: 15,
-    tag: 'Govt. Approved',
-    badgePillBg: 'bg-purple-50',
-    badgePillText: 'text-purple-700',
-    badgePillBorder: 'border-purple-200',
-    dotColor: 'bg-purple-500'
-  },
   item_1: {
     id: 'item_1',
     itemNo: 'ITEM #1',
     duration: 'RTO PROCESS',
     category: 'LICENCE',
+    sheetCategory: 'SINGLE',
     badge: null,
     badgeBg: 'bg-slate-700 text-white',
-    title: 'Only Two Wheeler Licence',
-    short: '2W Licence Only',
+    title: '2 wh license - 2500 (single)',
+    short: '2W Licence (single)',
     full: 'Only Two Wheeler Licence (MCWG / MCWOG)',
     subtitle: 'Motorcycle with Gear & Without Gear (MCWG / MCWOG)',
     features: 'Motorcycle with Gear & Without Gear (MCWG / MCWOG)',
-    defaultFee: 3500,
+    defaultFee: 2500,
     days: 10,
     tag: 'Govt. Approved',
     badgePillBg: 'bg-slate-100',
@@ -222,20 +144,126 @@ export const DRIVING_PACKAGES = {
     itemNo: 'ITEM #2',
     duration: 'RTO PROCESS',
     category: 'LICENCE',
+    sheetCategory: 'SINGLE',
     badge: null,
     badgeBg: 'bg-slate-700 text-white',
-    title: 'Only Four Wheeler Licence',
-    short: '4W Licence Only',
+    title: '4 wh license - 3000 (single)',
+    short: '4W Licence (single)',
     full: 'Only Four Wheeler Licence (LMV Smart Card)',
     subtitle: 'LMV Smart Card License Slot Booking & Track Escort',
     features: 'LMV Smart Card License Slot Booking & Track Escort',
-    defaultFee: 4000,
+    defaultFee: 3000,
     days: 10,
     tag: 'Govt. Approved',
     badgePillBg: 'bg-cyan-50',
     badgePillText: 'text-cyan-700',
     badgePillBorder: 'border-cyan-200',
     dotColor: 'bg-cyan-500'
+  },
+  item_3: {
+    id: 'item_3',
+    itemNo: 'ITEM #3',
+    duration: 'RTO PROCESS',
+    category: 'LICENCE',
+    sheetCategory: 'SINGLE',
+    badge: 'COMBO DL',
+    badgeBg: 'bg-orange-500 text-white',
+    title: '2 & 4 wh license - 4500 (single)',
+    short: '2W & 4W Licence (single)',
+    full: 'Two Wheeler & Four Wheeler Licence Only',
+    subtitle: 'LLR, Slot Booking, Document Scrutiny & RTO Test Representation',
+    features: 'LLR, Slot Booking, Document Scrutiny & RTO Test Representation',
+    defaultFee: 4500,
+    days: 15,
+    tag: 'Govt. Approved',
+    badgePillBg: 'bg-purple-50',
+    badgePillText: 'text-purple-700',
+    badgePillBorder: 'border-purple-200',
+    dotColor: 'bg-purple-500'
+  },
+  item_8: {
+    id: 'item_8',
+    itemNo: 'ITEM #4',
+    duration: '21 DAYS',
+    category: 'PACKAGE',
+    sheetCategory: 'DOUBLE',
+    badge: 'BEST VALUE • MOST POPULAR',
+    badgeBg: 'bg-amber-500 text-white',
+    title: '2 & 4 wh license with traning - 8000 (double)',
+    short: '2W & 4W + Training (double)',
+    full: 'Four Wheeler Training with 2 & 4 Wheeler Licence',
+    subtitle: 'Individual 1-on-1 Training • Flexible Installments • 2 Pre-RTO Test Trials Included',
+    features: 'Individual 1-on-1 Training • Flexible Installments • 2 Pre-RTO Test Trials Included',
+    defaultFee: 8000,
+    days: 21,
+    tag: 'Govt. Approved',
+    badgePillBg: 'bg-emerald-50',
+    badgePillText: 'text-emerald-700',
+    badgePillBorder: 'border-emerald-200',
+    dotColor: 'bg-emerald-500'
+  },
+  item_8_single: {
+    id: 'item_8_single',
+    itemNo: 'ITEM #5',
+    duration: '21 DAYS',
+    category: 'PACKAGE',
+    sheetCategory: 'SINGLE',
+    badge: 'CAR SPECIALIST',
+    badgeBg: 'bg-amber-600 text-white',
+    title: '4 wh license with training - 8000 (single)',
+    short: '4W + Training (single)',
+    full: 'Four Wheeler Training with 4 Wheeler Licence Only',
+    subtitle: 'Individual 1-on-1 Training • Flexible Installments • Pre-RTO Test Trial Included',
+    features: 'Individual 1-on-1 Training • Flexible Installments • Pre-RTO Test Trial Included',
+    defaultFee: 8000,
+    days: 21,
+    tag: 'Govt. Approved',
+    badgePillBg: 'bg-blue-50',
+    badgePillText: 'text-blue-700',
+    badgePillBorder: 'border-blue-200',
+    dotColor: 'bg-blue-500'
+  },
+  item_12: {
+    id: 'item_12',
+    itemNo: 'ITEM #6',
+    duration: '21 DAYS',
+    category: 'TRAINING',
+    sheetCategory: 'TRAINNING ONLY',
+    badge: 'SKILL MASTERY',
+    badgeBg: 'bg-orange-500 text-white',
+    title: '21 days training - 6000 (training only)',
+    short: '21D Training (training only)',
+    full: 'Four Wheeler Training Only - 21 Days',
+    subtitle: 'Full 21 Days 40-Min Daily On-Road & Highway Practice • Flexible Payment Options',
+    features: 'Full 21 Days 40-Min Daily On-Road & Highway Practice • Flexible Payment Options',
+    defaultFee: 6000,
+    days: 21,
+    tag: 'Govt. Approved',
+    badgePillBg: 'bg-orange-50',
+    badgePillText: 'text-orange-700',
+    badgePillBorder: 'border-orange-200',
+    dotColor: 'bg-orange-500'
+  },
+  item_13: {
+    id: 'item_13',
+    itemNo: 'ITEM #7',
+    duration: '10 DAYS',
+    category: 'TRAINING',
+    sheetCategory: 'TRAINNING ONLY',
+    badge: 'FAST TRACK REFRESHER',
+    badgeBg: 'bg-amber-600 text-white',
+    title: '10 days traning - 4000 (training only)',
+    short: '10D Training (training only)',
+    full: 'Four Wheeler Training Only (Individual - 10 Days)',
+    subtitle: 'KMCH, Sulur Pirivu & Traffic Practice for Existing License Holders',
+    features: 'KMCH, Sulur Pirivu & Traffic Practice for Existing License Holders',
+    defaultFee: 4000,
+    days: 10,
+    tag: 'Govt. Approved',
+    badgePillBg: 'bg-amber-50',
+    badgePillText: 'text-amber-700',
+    badgePillBorder: 'border-amber-200',
+    dotColor: 'bg-amber-500'
   }
 };
 
@@ -243,7 +271,10 @@ export const CLASS_TYPES = {
   ...DRIVING_PACKAGES,
   '21d_license': DRIVING_PACKAGES.item_8,
   '21d_training': DRIVING_PACKAGES.item_12,
-  '10d_training': DRIVING_PACKAGES.item_13
+  '10d_training': DRIVING_PACKAGES.item_13,
+  'single': DRIVING_PACKAGES.item_2,
+  'double': DRIVING_PACKAGES.item_8,
+  'training_only': DRIVING_PACKAGES.item_12
 };
 
 export const getPackageDetails = (typeId) => {
@@ -255,178 +286,26 @@ export const getPackageDetails = (typeId) => {
   return DRIVING_PACKAGES.item_8;
 };
 
-// INITIAL TRAINEES - ACCURATELY MATCHING IMAGE 3 AND 6 PACKAGES
-const INITIAL_STUDENTS = [
-  { 
-    id: 'ST-001', 
-    enrollmentNo: '1', 
-    username: 'SMDS1', 
-    password: 'smds@1', 
-    name: 'Arun Kumar', 
-    initials: 'AK', 
-    course: 'Four Wheeler (Car)', 
-    type: 'item_8', 
-    time: '06:00 AM', 
-    status: 'pending', 
-    phone: '9876543210', 
-    enrollmentDate: '2026-10-01',
-    avatarColor: 'bg-orange-500', 
-    stats: { total: 21, attended: 12, missed: 1 }, 
-    fees: { 
-      total: 8000, 
-      paid: 4000, 
-      history: [{ id: 'p1', amount: 4000, method: 'UPI', date: '2026-10-01', note: 'Advance Fee Paid' }] 
-    },
-    attendanceLog: [
-      { date: '2026-10-12', formattedDate: '12 Oct 2026', time: 'Missed Session', slot: '06:00 AM', status: 'absent' },
-      { date: '2026-10-10', formattedDate: '10 Oct 2026', time: '05:55 AM', slot: '06:00 AM', status: 'present' },
-      { date: '2026-10-10', formattedDate: '10 Oct 2026', time: '06:01 AM', slot: '06:00 AM', status: 'present' },
-      { date: '2026-10-09', formattedDate: '09 Oct 2026', time: '06:05 AM', slot: '06:00 AM', status: 'present' },
-      { date: '2026-10-08', formattedDate: '08 Oct 2026', time: '06:12 AM', slot: '06:00 AM', status: 'present' },
-    ]
-  },
-  { 
-    id: 'ST-002', 
-    enrollmentNo: '2', 
-    username: 'SMDS2', 
-    password: 'smds@2', 
-    name: 'Priya Raj', 
-    initials: 'PR', 
-    course: 'Four Wheeler (Car)', 
-    type: 'item_13', 
-    time: '07:00 AM', 
-    status: 'present', 
-    lastCheckInDate: getTodayKey(),
-    lastCheckInTime: '07:00 AM',
-    phone: '9876543211', 
-    enrollmentDate: '2026-10-02',
-    avatarColor: 'bg-blue-600', 
-    stats: { total: 10, attended: 4, missed: 0 }, 
-    fees: { 
-      total: 6000, 
-      paid: 6000, 
-      history: [{ id: 'p2', amount: 6000, method: 'Cash', date: '2026-10-02', note: 'Full Tuition Settled' }] 
-    },
-    attendanceLog: [
-      { date: getTodayKey(), formattedDate: '14 Oct 2026', time: '07:00 AM', slot: '07:00 AM', status: 'present' }
-    ]
-  },
-  { 
-    id: 'ST-003', 
-    enrollmentNo: '3', 
-    username: 'SMDS3', 
-    password: 'smds@3', 
-    name: 'Mohammed Ali', 
-    initials: 'MA', 
-    course: 'Four Wheeler (Car)', 
-    type: 'item_12', 
-    time: '10:00 AM', 
-    status: 'absent', 
-    lastCheckInDate: getTodayKey(),
-    lastCheckInTime: '10:00 AM',
-    phone: '9876543212', 
-    enrollmentDate: '2026-10-05',
-    avatarColor: 'bg-emerald-500', 
-    stats: { total: 21, attended: 2, missed: 1 }, 
-    fees: { 
-      total: 8000, 
-      paid: 2000, 
-      history: [{ id: 'p3', amount: 2000, method: 'UPI', date: '2026-10-05', note: 'Advance Fee Paid' }] 
-    },
-    attendanceLog: [
-      { date: getTodayKey(), formattedDate: '14 Oct 2026', time: '10:00 AM', slot: '10:00 AM', status: 'absent' }
-    ] 
-  },
-  { 
-    id: 'ST-004', 
-    enrollmentNo: '4', 
-    username: 'SMDS4', 
-    password: 'smds@4', 
-    name: 'Deepa S', 
-    initials: 'DS', 
-    course: 'Four Wheeler (Car)', 
-    type: 'item_13', 
-    time: '11:00 AM', 
-    status: 'pending', 
-    phone: '9876543213', 
-    enrollmentDate: '2026-09-15',
-    avatarColor: 'bg-rose-500', 
-    stats: { total: 10, attended: 0, missed: 0 }, 
-    fees: { 
-      total: 6000, 
-      paid: 1500, 
-      history: [{ id: 'p4', amount: 1500, method: 'Cash', date: '2026-09-15', note: 'Advance Fee Paid' }] 
-    } 
-  },
-  { 
-    id: 'ST-005', 
-    enrollmentNo: '5', 
-    username: 'SMDS5', 
-    password: 'smds@5', 
-    name: 'Vikram T', 
-    initials: 'VT', 
-    course: 'Four Wheeler (Car)', 
-    type: 'item_12', 
-    time: '10:00 AM', 
-    status: 'present', 
-    lastCheckInDate: getTodayKey(),
-    lastCheckInTime: '10:00 AM',
-    phone: '9876543214', 
-    enrollmentDate: '2026-10-03',
-    avatarColor: 'bg-purple-600', 
-    stats: { total: 21, attended: 9, missed: 0 }, 
-    fees: { 
-      total: 8000, 
-      paid: 8000, 
-      history: [{ id: 'p5', amount: 8000, method: 'UPI', date: '2026-10-03', note: 'Full Tuition Settled' }] 
-    },
-    attendanceLog: [
-      { date: getTodayKey(), formattedDate: '14 Oct 2026', time: '10:00 AM', slot: '10:00 AM', status: 'present' }
-    ]
-  },
-  { 
-    id: 'ST-006', 
-    enrollmentNo: '6', 
-    username: 'SMDS6', 
-    password: 'smds@6', 
-    name: 'Sneha Latha', 
-    initials: 'SL', 
-    course: 'Four Wheeler (Car)', 
-    type: 'item_3', 
-    time: '04:00 PM', 
-    status: 'pending', 
-    phone: '9876543215', 
-    enrollmentDate: '2026-09-20',
-    avatarColor: 'bg-amber-500', 
-    stats: { total: 15, attended: 5, missed: 2 }, 
-    fees: { 
-      total: 5500, 
-      paid: 3500, 
-      history: [{ id: 'p6', amount: 3500, method: 'Cash', date: '2026-09-20', note: 'Advance Fee Paid' }] 
-    } 
-  },
-  { 
-    id: 'ST-007', 
-    enrollmentNo: '7', 
-    username: 'SMDS7', 
-    password: 'smds@7', 
-    name: 'Rahul N', 
-    initials: 'RN', 
-    course: 'Four Wheeler (Car)', 
-    type: 'item_2', 
-    time: '05:00 PM', 
-    status: 'pending', 
-    phone: '9876543216', 
-    enrollmentDate: '2026-10-04',
-    avatarColor: 'bg-cyan-600', 
-    stats: { total: 10, attended: 18, missed: 0 }, 
-    fees: { 
-      total: 4000, 
-      paid: 2000, 
-      history: [{ id: 'p7', amount: 2000, method: 'UPI', date: '2026-10-04', note: 'Advance Fee Paid' }] 
-    } 
-  },
-];
+// Google Apps Script Live Sync Helper
+export const syncToGoogleSheets = async (action, data) => {
+  const url = localStorage.getItem('smds_sheets_sync_url') || (typeof window !== 'undefined' ? window.SMDS_APPSCRIPT_URL : null);
+  if (!url) {
+    console.info('Google Sheets Live Sync URL not set. Trainee saved locally in portal.');
+    return;
+  }
+  try {
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...data })
+    });
+    console.log('✅ Dispatched live sync to Google Sheets:', action, data?.name || data?.sNo);
+  } catch (err) {
+    console.warn('⚠️ Google Sheets live sync network error:', err);
+  }
+};
+
 
 const getStudentAvatarBg = (student) => {
   const init = student?.initials || (student?.name ? student.name.slice(0, 2).toUpperCase() : 'ST');
@@ -625,10 +504,10 @@ export default function App() {
   // LocalStorage persistence for Trainees & Attendance
   const [students, setStudents] = useState(() => {
     try {
-      const saved = localStorage.getItem('smds_trainees_data_v4');
+      const saved = localStorage.getItem('smds_trainees_data_v5');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed) && parsed.length >= 50) {
           const seen = new Set();
           return parsed.map((s, idx) => {
             const norm = normalizeStudent(s);
@@ -653,7 +532,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('smds_trainees_data_v4', JSON.stringify(students));
+      localStorage.setItem('smds_trainees_data_v5', JSON.stringify(students));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -1731,6 +1610,23 @@ export default function App() {
         }
       };
       setStudents([...students, newStudent]);
+      
+      // Dispatch Live Sync to Google Sheets
+      const pkgDetails = getPackageDetails(formData.type);
+      syncToGoogleSheets('add_trainee', {
+        name: formData.name,
+        phone: formData.phone,
+        packageId: formData.type,
+        classType: pkgDetails.sheetCategory || 'SINGLE',
+        classDays: classCfg.days || '',
+        feesAmount: Number(formData.totalFees) || 0,
+        advanceReceived: paidAdvance,
+        paymentMethod: advMethod,
+        paymentDate: advDate,
+        startDate: advDate,
+        remark: classCfg.full || ''
+      });
+
       showToast(`New trainee registered (No. ${finalEnr} | Login: ${genUser})!`);
     } else if (modalConfig.mode === 'edit' || modalConfig.mode === 'reschedule') {
       const rawNum = String(formData.enrollmentNo || '').replace(/\D/g, '').trim();
@@ -1778,6 +1674,16 @@ export default function App() {
       const method = formData.paymentMethod || 'UPI';
       const date = formData.paymentDate || getTodayKey();
       const note = formData.paymentNote || '';
+
+      // Dispatch Live Sync Payment to Google Sheets
+      syncToGoogleSheets('update_payment', {
+        sNo: modalConfig.data.enrollmentNo || '',
+        phone: modalConfig.data.phone || '',
+        name: modalConfig.data.name || '',
+        additionalAmount: payAmount,
+        paymentMethod: method,
+        paymentDate: date
+      });
 
       setStudents(students.map(s => {
         if (s.id === modalConfig.data.id) {
